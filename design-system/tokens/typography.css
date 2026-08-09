@@ -1,0 +1,58 @@
+:root {
+  --font-sans: "BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic UI", Meiryo,
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --font-size-page-title: 1.375rem;
+  --font-size-section-title: 1.125rem;
+  --font-size-subsection: 0.9375rem;
+  --font-size-body: 0.875rem;
+  --font-size-label: 0.8125rem;
+  --font-size-supporting: 0.75rem;
+
+  --line-height-tight: 1.35;
+  --line-height-body: 1.6;
+  --line-height-dense: 1.45;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 600;
+  --font-weight-bold: 700;
+}
+
+.nm-page-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.nm-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.nm-subsection-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-subsection);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+}
+
+.nm-supporting-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-supporting);
+  line-height: var(--line-height-body);
+}
+
+.nm-number,
+.nm-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

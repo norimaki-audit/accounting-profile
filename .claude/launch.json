@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "accounting-profile",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-server.mjs"],
+      "port": 4173
+    }
+  ]
+}

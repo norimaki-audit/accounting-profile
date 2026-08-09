@@ -1,0 +1,29 @@
+.nm-empty-state {
+  padding: var(--space-7) var(--space-5);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-card);
+  text-align: center;
+}
+
+.nm-empty-state__icon {
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: var(--space-3);
+  color: var(--brand-600);
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.nm-empty-state__title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-subsection);
+}
+
+.nm-empty-state__description {
+  max-width: 32rem;
+  margin: 0 auto var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-label);
+}

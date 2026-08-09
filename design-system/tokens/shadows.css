@@ -1,0 +1,5 @@
+:root {
+  --shadow-none: none;
+  --shadow-raised: 0 1px 2px rgb(24 29 28 / 7%);
+  --shadow-dialog: 0 12px 32px rgb(24 29 28 / 18%);
+}

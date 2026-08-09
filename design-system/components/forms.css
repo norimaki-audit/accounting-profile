@@ -1,0 +1,114 @@
+.nm-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nm-label,
+.nm-fieldset__legend {
+  color: var(--text-primary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-dense);
+}
+
+.nm-required {
+  margin-left: var(--space-1);
+  color: var(--danger);
+  font-size: var(--font-size-supporting);
+}
+
+.nm-input,
+.nm-select,
+.nm-textarea {
+  width: 100%;
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.nm-textarea {
+  min-height: 6rem;
+  padding-block: var(--space-2);
+  resize: vertical;
+}
+
+.nm-input:hover,
+.nm-select:hover,
+.nm-textarea:hover {
+  border-color: var(--gray-500);
+}
+
+.nm-input:focus,
+.nm-select:focus,
+.nm-textarea:focus {
+  border-color: var(--focus-ring);
+  outline: 2px solid color-mix(in srgb, var(--focus-ring) 28%, transparent);
+  outline-offset: 0;
+}
+
+.nm-input:disabled,
+.nm-select:disabled,
+.nm-textarea:disabled {
+  background: var(--surface-disabled);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.nm-input[aria-invalid="true"],
+.nm-select[aria-invalid="true"],
+.nm-textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.nm-field__support,
+.nm-field__error {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-supporting);
+  line-height: var(--line-height-dense);
+}
+
+.nm-field__error {
+  color: var(--danger-strong);
+}
+
+.nm-choice {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  cursor: pointer;
+}
+
+.nm-choice input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.18em 0 0;
+  accent-color: var(--brand-600);
+}
+
+.nm-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nm-fieldset__legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.nm-choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+}

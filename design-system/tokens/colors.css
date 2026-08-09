@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light;
+
+  /* Brand — Muted Teal / Tool Green */
+  --brand-50: #f2f7f6;
+  --brand-100: #e2eeec;
+  --brand-200: #c5ddd9;
+  --brand-300: #9fc5bf;
+  --brand-400: #76aaa2;
+  --brand-500: #568f87;
+  --brand-600: #47776f;
+  --brand-700: #3b625d;
+  --brand-800: #324f4b;
+  --brand-900: #2b4240;
+
+  /* Neutral */
+  --gray-50: #f8faf9;
+  --gray-100: #f1f4f3;
+  --gray-200: #e2e8e6;
+  --gray-300: #cbd4d1;
+  --gray-400: #9aa6a2;
+  --gray-500: #6b7773;
+  --gray-600: #56615d;
+  --gray-700: #3e4744;
+  --gray-800: #282f2d;
+  --gray-900: #181d1c;
+
+  /* Semantic — brandとは別の意味色 */
+  --success: #237a57;
+  --success-strong: #195d41;
+  --success-surface: #e8f4ed;
+  --success-border: #badcc9;
+
+  --warning: #946313;
+  --warning-strong: #704a0d;
+  --warning-surface: #fbf2e2;
+  --warning-border: #e8d5ae;
+
+  --danger: #b0413b;
+  --danger-strong: #8c312d;
+  --danger-surface: #f8eae8;
+  --danger-border: #e9c5c1;
+
+  --info: #2d5a86;
+  --info-strong: #204467;
+  --info-surface: #eaf1f7;
+  --info-border: #c6d8e8;
+
+  /* Surface */
+  --surface-page: #f4f6f6;
+  --surface-card: #ffffff;
+  --surface-muted: #f7faf9;
+  --surface-selected: var(--brand-50);
+  --surface-disabled: var(--gray-100);
+  --surface-overlay: rgb(24 29 28 / 48%);
+
+  /* Border */
+  --border-default: #d8dfdd;
+  --border-strong: #b9c4c1;
+  --border-subtle: #e8edeb;
+
+  /* Text */
+  --text-primary: #1a211f;
+  --text-secondary: #4d5a56;
+  --text-muted: #66736f;
+  --text-disabled: #8d9995;
+  --text-on-brand: #ffffff;
+  --text-link: var(--brand-700);
+
+  /* Interaction */
+  --action-primary: var(--brand-600);
+  --action-primary-hover: var(--brand-700);
+  --action-primary-active: var(--brand-800);
+  --focus-ring: var(--brand-500);
+}

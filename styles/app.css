@@ -580,7 +580,7 @@ h2,
   margin-bottom: var(--space-1);
 }
 
-/* 象徴ビジュアル */
+/* 象徴ビジュアル（アーキタイプのキャラクター） */
 
 .ap-visual-card {
   overflow: hidden;
@@ -589,7 +589,10 @@ h2,
 
 .ap-visual {
   position: relative;
-  height: 210px;
+  display: grid;
+  place-items: center;
+  min-height: 210px;
+  padding: var(--space-5) var(--space-4);
   overflow: hidden;
 }
 
@@ -599,28 +602,119 @@ h2,
   border: 1.5px solid;
 }
 
-.ap-visual-label {
-  position: absolute;
-  left: 16px;
-  bottom: 12px;
-  color: rgba(255, 255, 255, 0.96);
+.ap-visual-char {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(232px, 62vw);
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  border-radius: 3px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 22%);
+}
+
+.ap-visual-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-card);
 }
 
 .ap-visual-brand {
   font-size: 0.625rem;
   letter-spacing: 0.16em;
-  opacity: 0.8;
+  color: var(--text-muted);
 }
 
 .ap-visual-name {
   font-size: 20px;
 }
 
-.ap-visual-prompt {
-  margin: 0;
-  padding: 8px 12px;
-  text-transform: none;
-  letter-spacing: 0;
+.ap-visual-animal {
+  flex: none;
+}
+
+/* TOP: キャラクターが右から左へ流れる帯 */
+
+.ap-marquee {
+  margin: var(--space-5) 0 var(--space-4);
+}
+
+.ap-marquee-kicker {
+  font-size: 0.625rem;
+  color: var(--brand-700);
+  letter-spacing: 0.16em;
+  margin-bottom: var(--space-2);
+}
+
+.ap-marquee-viewport {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+.ap-marquee-track {
+  display: flex;
+  width: max-content;
+  /* 2周ぶんを敷いて -50% まで動かすため、タイル幅は margin-right で揃える */
+  animation: apMarquee calc(var(--ap-marquee-count, 15) * 2.6s) linear infinite;
+}
+
+.ap-marquee:hover .ap-marquee-track,
+.ap-marquee:focus-within .ap-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes apMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.ap-marquee-tile {
+  flex: none;
+  width: 108px;
+  margin-right: var(--space-3);
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
+  background: var(--surface-card);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.ap-marquee-tile:hover {
+  border-color: var(--brand-500);
+}
+
+.ap-marquee-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--surface-muted);
+}
+
+.ap-marquee-name {
+  display: block;
+  padding: 6px 8px;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+/* 自動スクロールを止める設定では、手でスクロールできる帯にする */
+@media (prefers-reduced-motion: reduce) {
+  .ap-marquee-viewport {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }
 
 /* カード共通 */
@@ -1093,8 +1187,18 @@ h2,
 }
 
 .ap-type-chip {
+  position: relative;
   display: block;
-  height: 44px;
+  height: 132px;
+  overflow: hidden;
+}
+
+.ap-type-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
 }
 
 .ap-type-body {
@@ -1105,6 +1209,11 @@ h2,
 .ap-type-name {
   display: block;
   font-size: 1rem;
+}
+
+.ap-type-animal {
+  margin-top: 4px;
+  font-size: 0.625rem;
 }
 
 .ap-type-copy {

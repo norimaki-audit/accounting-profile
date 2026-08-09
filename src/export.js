@@ -170,12 +170,23 @@ function sectionTitle(ctx, title, note, x, y) {
 
 // ---------------------------------------------------------------- PNG シート
 
+/** 同一オリジンの画像を読み込む。用意されていなければ null を返す（描画は続行する）。 */
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 /**
  * 5 レイヤーすべてを 1 枚にした縦長のプロフィールシートを描く。
  * 高さは内容によって変わるため、十分に高いキャンバスへ描いてから実寸で切り出す。
  */
-export function renderProfileSheet(result, code) {
+export async function renderProfileSheet(result, code) {
   const tp = D.types[code];
+  const character = await loadImage(D.characterImage(code));
   const MAX_H = 4200;
 
   const src = document.createElement("canvas");
@@ -206,7 +217,7 @@ export function renderProfileSheet(result, code) {
   y = 84;
 
   // --- アーキタイプ（象徴ビジュアル）
-  const heroH = 300;
+  const heroH = 340;
   const grad = ctx.createLinearGradient(0, y, SHEET_WIDTH, y + heroH);
   grad.addColorStop(0, tp.c[0]);
   grad.addColorStop(1, tp.c[1]);
@@ -230,18 +241,38 @@ export function renderProfileSheet(result, code) {
     ctx.restore();
   });
 
-  drawText(ctx, "YOUR ARCHETYPE", PAD, y + 118, {
+  // キャラクター（未用意のアーキタイプでは省略し、文字だけのヒーローになる）
+  const charSize = 232;
+  const charX = SHEET_WIDTH - PAD - charSize;
+  const charY = y + (heroH - charSize) / 2;
+  if (character) {
+    ctx.save();
+    roundRect(ctx, charX, charY, charSize, charSize, 4);
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.clip();
+    ctx.drawImage(character, charX, charY, charSize, charSize);
+    ctx.restore();
+  }
+  const heroTextWidth = (character ? charX - 28 : SHEET_WIDTH - PAD) - PAD;
+
+  drawText(ctx, "YOUR ARCHETYPE", PAD, y + 96, {
     font: mono(13), color: "rgba(255,255,255,.78)",
   });
-  drawText(ctx, tp.name, PAD, y + 178, { font: mincho(52), color: "#ffffff" });
-  drawParagraph(ctx, `「${tp.copy}」`, PAD, y + 222, SHEET_WIDTH - PAD * 2, {
+  drawText(ctx, tp.name, PAD, y + 156, { font: mincho(52), color: "#ffffff" });
+  const animal = D.animals[code];
+  if (animal) {
+    drawText(ctx, animal, PAD, y + 190, { font: gothic(15, 600), color: "rgba(255,255,255,.82)" });
+  }
+  drawParagraph(ctx, `「${tp.copy}」`, PAD, y + 226, heroTextWidth, {
     font: mincho(22, 400), color: "rgba(255,255,255,.94)", lineHeight: 34,
   });
-  drawText(
+  drawParagraph(
     ctx,
     "アーキタイプは Work Style から生成する SNS 向けのラベルです。心理学的なタイプ判定ではありません。",
-    PAD, y + heroH - 24,
-    { font: gothic(13), color: "rgba(255,255,255,.78)" }
+    PAD, y + heroH - 22, heroTextWidth,
+    { font: gothic(13), color: "rgba(255,255,255,.78)", lineHeight: 20 }
   );
   y += heroH + 28;
 
@@ -456,22 +487,14 @@ function downloadBlob(blob, filename) {
 }
 
 /** PNG プロフィールシートを保存する。 */
-export function downloadSheet(result, code) {
-  return new Promise((resolve, reject) => {
-    try {
-      const canvas = renderProfileSheet(result, code);
-      canvas.toBlob((blob) => {
-        if (!blob) return reject(new Error("画像を生成できませんでした"));
-        downloadBlob(
-          blob,
-          `会計人プロフィール_${safeName(D.types[code].name)}_${formatDate(new Date())}.png`
-        );
-        resolve();
-      }, "image/png");
-    } catch (err) {
-      reject(err);
-    }
-  });
+export async function downloadSheet(result, code) {
+  const canvas = await renderProfileSheet(result, code);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("画像を生成できませんでした");
+  downloadBlob(
+    blob,
+    `会計人プロフィール_${safeName(D.types[code].name)}_${formatDate(new Date())}.png`
+  );
 }
 
 /** 回答の生データ + スコアを JSON で保存する（読み込めば結果を再表示できる）。 */

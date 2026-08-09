@@ -14,17 +14,29 @@ export function renderTypes() {
     h("div.ap-types-grid", {},
       D.typeOrder.map((code) => {
         const tp = D.types[code];
+
+        // 画像が無いアーキタイプはグラデーションのチップのままにする
+        const chip = h("span.ap-type-chip", {
+          style: `background:linear-gradient(120deg,${tp.c[0]},${tp.c[1]})`,
+        });
+        const img = h("img.ap-type-img", {
+          alt: "",
+          decoding: "async",
+          onError: (e) => e.currentTarget.remove(),
+        });
+        img.src = D.characterThumb(code);
+        chip.append(img);
+
         return btn("button.nm-surface.ap-type-card", {
           onClick: () => {
             setState({ screen: "result", preview: true, previewCode: code });
             scrollTop();
           },
         },
-          h("span.ap-type-chip", {
-            style: `background:linear-gradient(120deg,${tp.c[0]},${tp.c[1]})`,
-          }),
+          chip,
           h("span.ap-type-body", {},
             h("span.ap-serif.ap-type-name", { text: tp.name }),
+            h("span.nm-badge.ap-type-animal", { text: D.animals[code] }),
             h("span.ap-type-copy", { text: tp.copy })
           )
         );

@@ -23,7 +23,7 @@ export function renderResult() {
   const sections = [];
   const push = (node) => { if (node) sections.push(node); };
 
-  push(renderVisual(tp));
+  push(renderVisual(tp, code));
   push(renderWorkStyle(axes));
   push(renderPersonality(personal));
   push(renderSubject(personal));
@@ -223,26 +223,54 @@ function renderDownloadReminder(result, code) {
 
 // ---------------------------------------------------------------- 各レイヤー
 
-function renderVisual(tp) {
+/**
+ * 象徴ビジュアル。アーキタイプごとのキャラクター画像を主役に置き、
+ * 画像が用意されていないコードではグラデーションのみの表示に自動で戻す。
+ */
+function renderVisual(tp, code) {
   const shape = (size, x, y, opacity, rot) =>
     h("div.ap-visual-shape", {
       style: `width:${size}px;height:${size}px;left:${x}%;top:${y}%;border-color:rgba(255,255,255,${opacity});transform:rotate(${rot}deg)`,
     });
 
-  return h("div.nm-surface.ap-visual-card", {},
-    h("div.ap-visual", { style: `background:linear-gradient(135deg,${tp.c[0]},${tp.c[1]})` },
-      shape(84, 64, 16, 0.7, 12),
-      shape(130, 10, 36, 0.35, -6),
-      shape(52, 44, 60, 0.5, 30),
-      h("div.ap-visual-label", {},
-        h("div.nm-mono.ap-visual-brand", { text: "Accounting Profile" }),
-        h("div.ap-serif.ap-visual-name", { text: tp.name })
-      )
-    ),
-    h("p.nm-mono.nm-supporting-text.ap-visual-prompt", {
-      text: `symbol image placeholder — 将来ここに生成画像が入ります · prompt: ${tp.prompt}`,
-    })
+  const animal = D.animals[code];
+  const band = h("div.ap-visual", {
+    style: `background:linear-gradient(135deg,${tp.c[0]},${tp.c[1]})`,
+  },
+    shape(84, 64, 16, 0.7, 12),
+    shape(130, 10, 36, 0.35, -6),
+    shape(52, 44, 60, 0.5, 30)
   );
+
+  const animalBadge = animal
+    ? h("span.nm-badge.nm-badge--brand.ap-visual-animal", { text: animal })
+    : null;
+
+  const caption = h("div.ap-visual-caption", {},
+    h("div", {},
+      h("div.nm-mono.ap-visual-brand", { text: "Accounting Profile" }),
+      h("div.ap-serif.ap-visual-name", { text: tp.name })
+    ),
+    animalBadge
+  );
+
+  // ハンドラを先に付けてから src を与える（読み込み結果を取りこぼさないため）
+  const character = h("img.ap-visual-char", {
+    alt: `${tp.name}のキャラクター（${animal}）`,
+    decoding: "async",
+    style: prefersReducedMotion() ? null : "animation:tmPop var(--ap-anim-tmPop) 120ms both",
+    onLoad: () => band.classList.add("is-loaded"),
+    onError: (e) => {
+      // 画像が未用意のアーキタイプはグラデーションのみで表示する
+      e.currentTarget.remove();
+      band.classList.add("ap-visual--fallback");
+      animalBadge?.remove();
+    },
+  });
+  character.src = D.characterImage(code);
+  band.append(character);
+
+  return h("div.nm-surface.ap-visual-card", {}, band, caption);
 }
 
 function card(title, note, ...children) {

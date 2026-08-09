@@ -44,6 +44,8 @@ export function renderHome() {
       "で可視化します。「何タイプか」だけでは終わらせません。"
     ),
 
+    renderMarquee(),
+
     h("div.ap-home-actions", {},
       btn("button.nm-btn.nm-btn--primary.nm-btn--lg.ap-cta", { onClick: startQuiz, text: "プロフィールを作る" }),
       canResume &&
@@ -66,6 +68,50 @@ export function renderHome() {
     renderPrivacyPanel(canResume),
     h("div.nm-alert.ap-disclaimer", { text: D.DISCLAIMER_HOME })
   );
+}
+
+/**
+ * アーキタイプのキャラクターが右から左へ流れる帯。
+ * 「やってみたい」を作る導線なので、タップでそのアーキタイプの図鑑プレビューへ送る。
+ * 実在する画像だけを並べるため、描画は availableCharacters() の解決後に行う。
+ */
+function renderMarquee() {
+  const track = h("div.ap-marquee-track");
+  const section = h("section.ap-marquee", { "aria-label": "アーキタイプのキャラクター一覧", hidden: true },
+    h("div.nm-mono.ap-marquee-kicker", { text: "16 ARCHETYPES — タップで中身を見る" }),
+    h("div.ap-marquee-viewport", {}, track)
+  );
+
+  D.availableCharacters().then((codes) => {
+    if (!codes.length) return;
+    // 同じ並びを2周ぶん敷き、-50% まで動かして途切れないループにする
+    track.append(...buildTiles(codes, false), ...buildTiles(codes, true));
+    track.style.setProperty("--ap-marquee-count", String(codes.length));
+    section.hidden = false;
+  });
+
+  return section;
+}
+
+function buildTiles(codes, isDuplicate) {
+  return codes.map((code) => {
+    const tp = D.types[code];
+    const img = h("img.ap-marquee-img", { alt: "", decoding: "async" });
+    img.src = D.characterThumb(code);
+    return btn("button.ap-marquee-tile", {
+      "aria-label": `${tp.name}（${D.animals[code]}）を見る`,
+      // 複製ぶんは読み上げ・タブ移動の重複を避ける
+      "aria-hidden": isDuplicate ? "true" : null,
+      tabindex: isDuplicate ? "-1" : null,
+      onClick: () => {
+        setState({ screen: "result", preview: true, previewCode: code });
+        scrollTop();
+      },
+    },
+      img,
+      h("span.ap-marquee-name", { text: tp.name })
+    );
+  });
 }
 
 /**

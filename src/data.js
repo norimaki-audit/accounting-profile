@@ -118,6 +118,37 @@ export const typeOrder = [
   "BVSD", "BVSC", "BVAD", "BVAC", "BXSD", "BXSC", "BXAD", "BXAC",
 ];
 
+// アーキタイプの象徴キャラクター（動物）。
+// 画像は assets/archetypes/{CODE}.jpg（結果画面）と assets/archetypes/thumb/{CODE}.jpg
+// （一覧・マーキー）に置く。画像が無いコードは自動でグラデーション表示にフォールバックし、
+// ファイルを追加すればコード変更なしで表示される（availableCharacters() が実在を確認する）。
+export const animals = {
+  PVSD: "ハリネズミ", PVSC: "シェパード", PVAD: "フクロウ", PVAC: "ライオン",
+  PXSD: "ツル", PXSC: "クモ", PXAD: "モグラ", PXAC: "ビーバー",
+  BVSD: "リス", BVSC: "コーギー", BVAD: "タカ", BVAC: "オウム",
+  BXSD: "キツネ", BXSC: "カメレオン", BXAD: "イルカ", BXAC: "ネコ",
+};
+
+export const characterImage = (code) => `./assets/archetypes/${code}.jpg`;
+export const characterThumb = (code) => `./assets/archetypes/thumb/${code}.jpg`;
+
+let availablePromise = null;
+
+/** 実在するキャラクター画像のコード一覧。1度だけ判定し、以降はキャッシュを返す。 */
+export function availableCharacters() {
+  if (!availablePromise) {
+    availablePromise = Promise.all(
+      typeOrder.map((code) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(code);
+        img.onerror = () => resolve(null);
+        img.src = characterThumb(code);
+      }))
+    ).then((codes) => codes.filter(Boolean));
+  }
+  return availablePromise;
+}
+
 // 極ごとの傾向文（断定を避け「〜しやすい」の表現に留める）
 export const habits = {
   V: "意見が割れたら、まず根拠と基準に立ち返る",

@@ -21,10 +21,63 @@ export function likertItems() {
     .concat(D.study.map((q) => ({ ...q, sec: "C" })));
 }
 
-export const PER_PAGE = 4;
-export const likertPageCount = () => Math.ceil(likertItems().length / PER_PAGE);
-export const pageCount = () => likertPageCount() + D.profile.ops.length;
+// ページ分割 — セクションの切れ目とページの切れ目を一致させる。
+//
+// 「コア」= Personality + Work Style（41問・9ページ）。ここまでで結果を出す。
+// アーキタイプは Work Style から生成するので、コアだけでシェアできる形が完成する。
+// 「任意」= Study Behavior + Subject/Practice DNA（15回答・9ページ）。続けたい人だけ進む。
+const LIKERT_SECTIONS = [
+  { sec: "A", perPage: 5, core: true },   // Personality 25 → 5ページ
+  { sec: "B", perPage: 4, core: true },   // Work Style   16 → 4ページ
+  { sec: "C", perPage: 4, core: false },  // Study         8 → 2ページ
+];
+
+let pagesCache = null;
+
+/**
+ * 出題ページの一覧。
+ * likert ページは { kind:"likert", sec, core, indices }、DNA ページは { kind:"op", op, core:false }。
+ */
+export function pages() {
+  if (pagesCache) return pagesCache;
+  const items = likertItems();
+  const out = [];
+  LIKERT_SECTIONS.forEach(({ sec, perPage, core }) => {
+    const idx = items.reduce((a, q, i) => (q.sec === sec ? a.concat(i) : a), []);
+    for (let i = 0; i < idx.length; i += perPage) {
+      out.push({ kind: "likert", sec, core, indices: idx.slice(i, i + perPage) });
+    }
+  });
+  D.profile.ops.forEach((op) => out.push({ kind: "op", op, core: false }));
+  pagesCache = out;
+  return out;
+}
+
+export const pageCount = () => pages().length;
+/** コアの最終ページの次 = 任意パートの先頭ページ番号 */
+export const corePageCount = () => pages().filter((p) => p.core).length;
+
+/** コア（Personality + Work Style）の Likert インデックス */
+export const coreIndices = () => pages().filter((p) => p.core).flatMap((p) => p.indices);
+
 export const totalCount = () => likertItems().length + D.profile.ops.length;
+export const coreCount = () => coreIndices().length;
+export const optionalCount = () => totalCount() - coreCount();
+
+/** コアの回答済み数 */
+export function answeredCore(ans) {
+  return coreIndices().filter((i) => ans[i] != null).length;
+}
+
+/** 任意パート（Study + DNA）の回答済み数 */
+export function answeredOptional(ans, ops) {
+  const study = pages()
+    .filter((p) => p.kind === "likert" && !p.core)
+    .flatMap((p) => p.indices)
+    .filter((i) => ans[i] != null).length;
+  const opsDone = D.profile.ops.filter((op) => (ops[op.id] || []).length > 0).length;
+  return study + opsDone;
+}
 
 /** S0（経験資格）に応じて出題する科目リストを切り替える。未選択なら全科目。 */
 export function subjectPool(ops) {
@@ -88,42 +141,55 @@ function scoreStudy(ans, items) {
   return out;
 }
 
-/** Subject DNA: S1 各+2 / S2 +3 / S3 各+2 → 最大値 100 で正規化し上位 3。 */
+// Subject / Practice DNA は選択操作の集計であって測定値ではない。0–100 の数値で出すと
+// 精度のないところに数値の顔をさせてしまうため、「なぜこの科目・領域が挙がったか」を
+// そのままタグとして見せる。並び順にだけ内部の重み（w）を使う。
+const SUBJECT_TAG = { S1: "苦にならない", S2: "面白い", S3: "いまも語れる" };
+
+/** Subject DNA: 選ばれた設問をタグにして上位 3。並びはタグ数 → 重み。 */
 function scoreSubject(ops) {
-  const scores = {};
+  const map = {};
   D.profile.ops.forEach((op) => {
     if (op.kind !== "subject") return;
     (ops[op.id] || []).forEach((label) => {
-      scores[label] = (scores[label] || 0) + op.w;
+      const e = (map[label] = map[label] || { tags: [], w: 0 });
+      e.tags.push(SUBJECT_TAG[op.id]);
+      e.w += op.w;
     });
   });
-  const max = Math.max(1, ...Object.values(scores));
-  return Object.entries(scores)
-    .map(([label, v]) => ({ label, score: Math.round((v / max) * 100) }))
-    .sort((a, b) => b.score - a.score)
+  return Object.entries(map)
+    .map(([label, e]) => ({ label, tags: e.tags, w: e.w }))
+    .sort((a, b) => b.tags.length - a.tags.length || b.w - a.w)
     .slice(0, 3);
 }
 
-/** Practice DNA: P2 各+2 / P3 順位 3・2・1 → 正規化し上位 4。P1 は経験フラグのみ（加点なし）。 */
+/** Practice DNA: P1 経験 / P2 好き / P3 やりたい の組み合わせをタグにして上位 4。 */
 function scorePractice(ops) {
-  const scores = {};
+  const weights = {};
   const experienced = (ops.P1 || []).filter((l) => l !== "とくになし");
   const liked = ops.P2 || [];
   const wanted = ops.P3 || [];
 
-  liked.forEach((l) => { scores[l] = (scores[l] || 0) + 2; });
-  wanted.forEach((l, rank) => { scores[l] = (scores[l] || 0) + [3, 2, 1][rank]; });
+  liked.forEach((l) => { weights[l] = (weights[l] || 0) + 2; });
+  wanted.forEach((l, rank) => { weights[l] = (weights[l] || 0) + [3, 2, 1][rank]; });
 
-  const max = Math.max(1, ...Object.values(scores));
-  return Object.entries(scores)
-    .map(([label, v]) => ({
-      label,
-      score: Math.round((v / max) * 100),
-      exp: experienced.includes(label),
-      core: liked.includes(label) && wanted.includes(label),           // コア = 好き × やりたい
-      frontier: wanted.includes(label) && !experienced.includes(label), // フロンティア = 未経験 × やりたい
-    }))
-    .sort((a, b) => b.score - a.score)
+  return Object.entries(weights)
+    .map(([label, w]) => {
+      const exp = experienced.includes(label);
+      const isLiked = liked.includes(label);
+      const isWanted = wanted.includes(label);
+      const core = isLiked && isWanted;      // コア = 好き × やりたい
+      const frontier = isWanted && !exp;     // フロンティア = 未経験 × やりたい
+      // コア/フロンティアに当てはまらないものは、選ばれた設問をそのまま理由にする
+      const tags = [];
+      if (core) tags.push("コア");
+      else if (isLiked) tags.push("好き");
+      else if (isWanted && !frontier) tags.push("やりたい");
+      if (frontier) tags.push("フロンティア");
+      if (exp) tags.push("経験あり");
+      return { label, tags, w, core, frontier, exp };
+    })
+    .sort((a, b) => b.w - a.w)
     .slice(0, 4);
 }
 
@@ -140,6 +206,23 @@ export function computeResult(ans, ops) {
     practiceTop: scorePractice(ops),
     fromAnswers: true,
   };
+}
+
+/**
+ * まだ答えていない任意レイヤーの一覧（結果画面の「続きへ」導線に使う）。
+ * コアだけで結果を見た人と、最後まで答えた人で同じ結果画面を使い回すための判定。
+ */
+export function missingLayers(result) {
+  if (!result || !result.fromAnswers) return [];
+  const out = [];
+  if (!studyGroups(result).length) out.push({ key: "study", name: "Study Behavior", jp: "勉強のしかた", n: D.study.length });
+  if (!result.subjectTop || !result.subjectTop.length) {
+    out.push({ key: "subject", name: "Subject DNA", jp: "好きな科目", n: D.profile.ops.filter((o) => o.kind === "subject" || o.kind === "groups").length });
+  }
+  if (!result.practiceTop || !result.practiceTop.length) {
+    out.push({ key: "practice", name: "Practice DNA", jp: "興味のある実務", n: D.profile.ops.filter((o) => o.kind === "practice").length });
+  }
+  return out;
 }
 
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */

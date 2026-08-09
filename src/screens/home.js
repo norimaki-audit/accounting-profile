@@ -72,20 +72,23 @@ export function renderHome() {
 
 /**
  * アーキタイプのキャラクターが右から左へ流れる帯。
- * 「やってみたい」を作る導線なので、タップでそのアーキタイプの図鑑プレビューへ送る。
+ *
+ * ここは「自分のはどれだろう」と思ってもらうための帯なので、押して中身が読めては
+ * 面白くない。タップ導線もアーキタイプ名も出さず、画像を流すだけの装飾にしている
+ * （中身を見たい人向けには、ヘッダーの「アーキタイプ図鑑」がある）。
  * 実在する画像だけを並べるため、描画は availableCharacters() の解決後に行う。
  */
 function renderMarquee() {
   const track = h("div.ap-marquee-track");
-  const section = h("section.ap-marquee", { "aria-label": "アーキタイプのキャラクター一覧", hidden: true },
-    h("div.nm-mono.ap-marquee-kicker", { text: "16 ARCHETYPES — タップで中身を見る" }),
+  const section = h("section.ap-marquee", { "aria-hidden": "true", hidden: true },
+    h("div.nm-mono.ap-marquee-kicker", { text: "16 ARCHETYPES" }),
     h("div.ap-marquee-viewport", {}, track)
   );
 
   D.availableCharacters().then((codes) => {
     if (!codes.length) return;
     // 同じ並びを2周ぶん敷き、-50% まで動かして途切れないループにする
-    track.append(...buildTiles(codes, false), ...buildTiles(codes, true));
+    track.append(...buildTiles(codes), ...buildTiles(codes));
     track.style.setProperty("--ap-marquee-count", String(codes.length));
     section.hidden = false;
   });
@@ -93,24 +96,11 @@ function renderMarquee() {
   return section;
 }
 
-function buildTiles(codes, isDuplicate) {
+function buildTiles(codes) {
   return codes.map((code) => {
-    const tp = D.types[code];
     const img = h("img.ap-marquee-img", { alt: "", decoding: "async" });
     img.src = D.characterThumb(code);
-    return btn("button.ap-marquee-tile", {
-      "aria-label": `${tp.name}（${D.animals[code]}）を見る`,
-      // 複製ぶんは読み上げ・タブ移動の重複を避ける
-      "aria-hidden": isDuplicate ? "true" : null,
-      tabindex: isDuplicate ? "-1" : null,
-      onClick: () => {
-        setState({ screen: "result", preview: true, previewCode: code });
-        scrollTop();
-      },
-    },
-      img,
-      h("span.ap-marquee-name", { text: tp.name })
-    );
+    return h("div.ap-marquee-tile", {}, img);
   });
 }
 
@@ -183,7 +173,7 @@ function onRestoreFile(event) {
         preview: false,
         previewCode: null,
       });
-      history.replaceState(null, "", location.pathname + location.search);
+      history.replaceState(null, "", D.siteRoot());
       scrollTop();
     } catch (err) {
       fail(err instanceof Error ? err.message : "ファイルを読み込めませんでした。");

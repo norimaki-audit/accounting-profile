@@ -1,8 +1,9 @@
 import { h, btn, clear, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  likertItems, likertPageCount, pageCount, totalCount,
-  answeredCount, subjectPool, computeResult, PER_PAGE, NA,
+  likertItems, pages, pageCount, corePageCount,
+  coreCount, optionalCount, answeredCore, answeredOptional,
+  subjectPool, computeResult, NA,
 } from "../scoring.js";
 import { state, setState, saveDraft } from "../state.js";
 
@@ -28,9 +29,9 @@ export function renderQuiz() {
     role: "progressbar",
     "aria-label": "回答の進捗",
     "aria-valuemin": "0",
-    "aria-valuemax": String(totalCount()),
   }, progressFill);
 
+  const stageLabel = h("span.nm-badge.ap-quiz-stage");
   const pageLabel = h("span.nm-mono.ap-quiz-page");
   const countLabel = h("span.nm-mono.ap-quiz-count");
   const hint = h("p.nm-supporting-text.ap-quiz-hint");
@@ -49,10 +50,10 @@ export function renderQuiz() {
     },
   });
 
-  els = { body, progressBar, progressFill, pageLabel, countLabel, hint, prev, next };
+  els = { body, progressBar, progressFill, stageLabel, pageLabel, countLabel, hint, prev, next };
 
   const root = h("div.ap-quiz", { "data-screen-label": "質問画面" },
-    h("div.ap-quiz-head", {}, pageLabel, countLabel),
+    h("div.ap-quiz-head", {}, stageLabel, pageLabel, countLabel),
     progressBar,
     hint,
     body,
@@ -70,26 +71,31 @@ export function renderQuiz() {
   return root;
 }
 
+/** いま表示しているページがコア（Personality + Work Style）か */
+const onCore = () => state.page < corePageCount();
+
 function renderPage() {
   const items = likertItems();
-  const likertPages = likertPageCount();
-  const isOpsPage = state.page >= likertPages;
+  const page = pages()[state.page];
 
-  els.pageLabel.textContent = `PAGE ${state.page + 1} / ${pageCount()}`;
+  // 進捗はコア／任意で別々に数える。コア中に「41/56」と出すと未完了感が出るため。
+  const core = onCore();
+  els.stageLabel.textContent = core ? "STEP 1 — 結果が出るまで" : "STEP 2 — 追加の3レイヤー";
+  els.stageLabel.classList.toggle("nm-badge--brand", core);
+  els.pageLabel.textContent = core
+    ? `PAGE ${state.page + 1} / ${corePageCount()}`
+    : `PAGE ${state.page - corePageCount() + 1} / ${pageCount() - corePageCount()}`;
   els.body.className = `ap-quiz-body ap-quiz-body--${state.page % 2 === 0 ? "a" : "b"}`;
   clear(els.body);
 
-  if (isOpsPage) {
-    const op = D.profile.ops[state.page - likertPages];
-    els.hint.textContent = op.kind === "practice"
+  if (page.kind === "op") {
+    els.hint.textContent = page.op.kind === "practice"
       ? "Practice DNA — 実務領域の興味です。性格スコアには影響しません。"
       : "Subject DNA — 科目の興味です。性格スコアには影響しません。";
-    els.body.append(renderOpCard(op));
+    els.body.append(renderOpCard(page.op));
   } else {
-    const start = state.page * PER_PAGE;
-    const slice = items.slice(start, start + PER_PAGE);
-    els.hint.textContent = SECTION_HINT[slice[0] ? slice[0].sec : "A"];
-    slice.forEach((q, k) => els.body.append(renderLikertCard(q, start + k, slice, start)));
+    els.hint.textContent = SECTION_HINT[page.sec];
+    page.indices.forEach((idx) => els.body.append(renderLikertCard(items[idx], idx, page)));
   }
 
   syncProgress();
@@ -98,7 +104,7 @@ function renderPage() {
 
 // ---------------------------------------------------------------- Likert
 
-function renderLikertCard(q, idx, slice, start) {
+function renderLikertCard(q, idx, page) {
   const optionButtons = D.choices.map((c, ci) =>
     btn("button.ap-likert-dot", {
       title: c.label,
@@ -107,7 +113,7 @@ function renderLikertCard(q, idx, slice, start) {
       "data-value": String(c.v),
       style: `width:${LIKERT_SIZES[ci]}px;height:${LIKERT_SIZES[ci]}px`,
       class: c.v > 0 ? "ap-likert-dot--pos" : c.v < 0 ? "ap-likert-dot--neg" : "ap-likert-dot--mid",
-      onClick: () => pickLikert(idx, c.v, slice, start),
+      onClick: () => pickLikert(idx, c.v, page),
     })
   );
 
@@ -152,15 +158,16 @@ function renderLikertCard(q, idx, slice, start) {
   return card;
 }
 
-function pickLikert(idx, value, slice, start) {
+function pickLikert(idx, value, page) {
   setState({ ans: { ...state.ans, [idx]: value } }, { render: false });
   saveDraft();
   syncCard(idx);
   syncProgress();
   syncNav();
 
-  const pageComplete = slice.every((_, j) => state.ans[start + j] != null);
-  if (pageComplete && autoAdvanceEnabled() && state.page < pageCount() - 1) {
+  // コア最終ページ・全体最終ページでは自動で進めない（結果画面へ飛ばしてしまうため）
+  const atBreak = state.page === corePageCount() - 1 || state.page === pageCount() - 1;
+  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !atBreak) {
     clearTimeout(advanceTimer);
     advanceTimer = setTimeout(() => goNext(), 350);
   }
@@ -267,30 +274,28 @@ function syncCard(idx) {
 }
 
 function syncProgress() {
-  const done = answeredCount(state.ans, state.ops);
-  const total = totalCount();
+  const core = onCore();
+  const done = core ? answeredCore(state.ans) : answeredOptional(state.ans, state.ops);
+  const total = core ? coreCount() : optionalCount();
   els.countLabel.textContent = `${done} / ${total}`;
+  els.progressBar.setAttribute("aria-valuemax", String(total));
   els.progressBar.setAttribute("aria-valuenow", String(done));
   els.progressFill.style.width = `${Math.round((100 * done) / total)}%`;
 }
 
 function isPageComplete() {
-  const likertPages = likertPageCount();
-  if (state.page >= likertPages) {
-    const op = D.profile.ops[state.page - likertPages];
-    return (state.ops[op.id] || []).length > 0;
-  }
-  const start = state.page * PER_PAGE;
-  return likertItems()
-    .slice(start, start + PER_PAGE)
-    .every((_, j) => state.ans[start + j] != null);
+  const page = pages()[state.page];
+  return page.kind === "op"
+    ? (state.ops[page.op.id] || []).length > 0
+    : page.indices.every((i) => state.ans[i] != null);
 }
 
 function syncNav() {
-  const isLast = state.page === pageCount() - 1;
+  // コアの最後と全体の最後の 2 か所で結果画面へ抜ける
+  const isBreak = state.page === corePageCount() - 1 || state.page === pageCount() - 1;
   els.prev.disabled = state.page === 0;
   els.next.disabled = !isPageComplete();
-  els.next.textContent = isLast ? "プロフィールを見る" : "つぎへ";
+  els.next.textContent = isBreak ? "結果を見る" : "つぎへ";
 }
 
 function goPrev() {
@@ -306,13 +311,16 @@ function goNext() {
   clearTimeout(advanceTimer);
   if (!isPageComplete()) return;
 
-  if (state.page === pageCount() - 1) {
+  // コアを終えた時点で一度結果を見せる。任意パートは結果画面から続けられる。
+  if (state.page === corePageCount() - 1 || state.page === pageCount() - 1) {
     setState({
       screen: "result",
+      page: Math.min(state.page + 1, pageCount() - 1),
       result: computeResult(state.ans, state.ops),
       preview: false,
       previewCode: null,
     });
+    saveDraft();
     scrollTop();
     return;
   }

@@ -1,6 +1,9 @@
 import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
-import { evidence, studyGroups, studyOn, studyLabel, habitLines } from "../scoring.js";
+import {
+  evidence, studyGroups, studyOn, studyLabel, habitLines,
+  missingLayers, pages, corePageCount,
+} from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { downloadSheet, downloadJson } from "../export.js";
 
@@ -38,13 +41,62 @@ export function renderResult() {
     if (style) node.setAttribute("style", `${node.getAttribute("style") || ""};${style}`);
   });
 
+  const missing = missingLayers(personal);
+
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code),
-    personal ? renderDownloadPanel(personal, code) : null,
+    personal ? renderContinuePanel(missing) : null,
+    personal ? renderDownloadPanel(personal, code, missing) : null,
     sections,
+    personal ? renderContinuePanel(missing) : null,
     personal ? renderDownloadReminder(personal, code) : null,
     h("div.nm-alert.ap-disclaimer", { text: D.DISCLAIMER_RESULT })
   );
+}
+
+/**
+ * コアの 41 問だけで結果を見た人に、残りのレイヤーへの導線を出す。
+ * 「途中で止めた」ではなく「ここから先は任意」と読めるようにする。
+ */
+function renderContinuePanel(missing) {
+  if (!missing.length) return null;
+  const remaining = missing.reduce((n, m) => n + m.n, 0);
+
+  return h("div.nm-surface.ap-continue", {},
+    h("div.nm-mono.ap-continue-kicker", { text: "OPTIONAL" }),
+    h("div.ap-serif.ap-continue-title", { text: `あと${remaining}問で、残り${missing.length}レイヤー` }),
+    h("p.nm-supporting-text", {
+      text: "アーキタイプはここまでで確定しています。続けると次のレイヤーが結果に加わります。回答済みの内容はそのまま残ります。",
+    }),
+    h("ul.ap-continue-list", {},
+      missing.map((m) =>
+        h("li", {},
+          h("span.nm-mono.ap-continue-layer", { text: m.name }),
+          h("span", { text: `${m.jp}（${m.n}問）` })
+        )
+      )
+    ),
+    btn("button.nm-btn.nm-btn--primary.nm-btn--lg", {
+      text: `続きを答える（${remaining}問）`,
+      onClick: () => {
+        setState({ screen: "quiz", page: firstIncompleteOptionalPage(), preview: false, previewCode: null });
+        scrollTop();
+      },
+    })
+  );
+}
+
+/** 任意パートのうち、まだ埋まっていない最初のページ。途中まで答えた人を続きから戻す。 */
+function firstIncompleteOptionalPage() {
+  const all = pages();
+  for (let i = corePageCount(); i < all.length; i++) {
+    const p = all[i];
+    const done = p.kind === "op"
+      ? (state.ops[p.op.id] || []).length > 0
+      : p.indices.every((j) => state.ans[j] != null);
+    if (!done) return i;
+  }
+  return corePageCount();
 }
 
 // ---------------------------------------------------------------- ヘッダー
@@ -97,11 +149,16 @@ function renderHeader(tp, res, code) {
   );
 }
 
+/**
+ * 共有 URL はアーキタイプ別の静的ページ（/t/{CODE}/）を指す。
+ * このパスにだけ そのアーキタイプの og:image があり、X のリンクカードに動物が出る。
+ * Work Style の数値はこれまでどおりハッシュに載せる（サーバーへは送信されない）。
+ */
 function shareUrl(res, code) {
-  const base = location.origin + location.pathname;
+  const page = `${D.siteRoot()}t/${code}/`;
   return res && !state.preview && res.fromAnswers
-    ? `${base}#p=${res.code}.${res.axes.map((a) => a.pct).join(".")}`
-    : base;
+    ? `${page}#p=${res.code}.${res.axes.map((a) => a.pct).join(".")}`
+    : page;
 }
 
 /**
@@ -128,7 +185,7 @@ function shareToX(res, code, tp) {
 
 function retake() {
   clearDraft();
-  history.replaceState(null, "", location.pathname + location.search);
+  // URL のリセットは app.js の normalizeUrl が画面遷移時に行う
   setState({ screen: "quiz", ans: {}, ops: {}, page: 0, result: null, preview: false, previewCode: null });
   scrollTop();
 }
@@ -139,8 +196,9 @@ function retake() {
  * 結果はサーバーに保存しないため、手元に残す唯一の手段がこのダウンロードになる。
  * その事実と、いま以外は取り出せないことを明記する。
  */
-function renderDownloadPanel(result, code) {
+function renderDownloadPanel(result, code, missing) {
   const status = h("p.nm-supporting-text.ap-download-status", { hidden: true });
+  const layers = 5 - missing.length;
 
   return h("div.nm-alert.nm-alert--warning.ap-download", {},
     h("strong.nm-alert__title", { text: "この結果はサーバーに保存されません" }),
@@ -164,7 +222,9 @@ function renderDownloadPanel(result, code) {
       })
     ),
     h("p.nm-supporting-text.ap-download-hint", {
-      text: "画像は5レイヤーすべてを1枚にまとめたプロフィールシートです。データ（JSON）は回答の生データを含み、トップ画面から読み込むと同じ結果を再表示できます。どちらもお使いのブラウザ内で生成し、送信は行いません。",
+      text: missing.length
+        ? `画像はいま表示している${layers}レイヤーぶんのプロフィールシートです（残り${missing.length}レイヤーは未回答として記載されます）。続きを答えてから保存すると5レイヤーそろいます。データ（JSON）は回答の生データを含み、トップ画面から読み込むと同じ結果を再表示できます。どちらもお使いのブラウザ内で生成し、送信は行いません。`
+        : "画像は5レイヤーすべてを1枚にまとめたプロフィールシートです。データ（JSON）は回答の生データを含み、トップ画面から読み込むと同じ結果を再表示できます。どちらもお使いのブラウザ内で生成し、送信は行いません。",
     }),
     status
   );
@@ -343,18 +403,36 @@ function renderPersonality(res) {
   );
 }
 
-function renderSubject(res) {
-  if (!res || !res.subjectTop || !res.subjectTop.length) return null;
-  return card("Subject DNA", "— 好きな科目（性格スコアには影響しません）",
-    h("div.ap-dna-list", {},
-      res.subjectTop.map((d) =>
-        h("div.ap-dna-row", {},
-          h("span.ap-dna-label", { text: d.label }),
-          h("div.ap-bar.ap-bar--md.ap-dna-bar", {}, h("div.ap-bar-fill", { style: `width:${d.score}%` })),
-          h("span.nm-number.ap-dna-score", { text: String(d.score) })
+// DNA 2 レイヤーは選択操作の集計なので数値では出さず、「なぜ挙がったか」をタグで見せる。
+// 強い理由（面白い / コア / フロンティア）だけ色をつけ、残りは無地のタグにする。
+const TAG_CLASS = {
+  "面白い": "nm-badge--brand",
+  "コア": "nm-badge--brand",
+  "フロンティア": "nm-badge--warning",
+};
+
+function dnaList(rows) {
+  return h("div.ap-dna-list", {},
+    rows.map((d) =>
+      h("div.ap-dna-item", {},
+        h("span.ap-dna-name", { text: d.label }),
+        h("span.ap-dna-tags", {},
+          d.tags.map((t) =>
+            h("span.nm-badge.ap-dna-tag", { class: TAG_CLASS[t] || null, text: t })
+          )
         )
       )
     )
+  );
+}
+
+function renderSubject(res) {
+  if (!res || !res.subjectTop || !res.subjectTop.length) return null;
+  return card("Subject DNA", "— 好きな科目（性格スコアには影響しません）",
+    h("p.nm-supporting-text.ap-card-lead", {
+      text: "点数ではなく、その科目を選んだ理由をそのまま並べています。",
+    }),
+    dnaList(res.subjectTop)
   );
 }
 
@@ -364,20 +442,7 @@ function renderPractice(res) {
     h("p.nm-supporting-text.ap-card-lead", {
       text: "経験がない領域は「これから」なだけです。コア=好き×やりたい、フロンティア=未経験×やりたい。",
     }),
-    h("div.ap-dna-list", {},
-      res.practiceTop.map((d) =>
-        h("div.ap-dna-row.ap-dna-row--practice", {},
-          h("span.ap-dna-label.ap-dna-label--wide", { text: d.label }),
-          h("div.ap-bar.ap-bar--md.ap-dna-bar", {}, h("div.ap-bar-fill", { style: `width:${d.score}%` })),
-          h("span.nm-number.ap-dna-score", { text: String(d.score) }),
-          h("span.ap-dna-badges", {},
-            d.core ? h("span.nm-badge.nm-badge--brand.ap-mini-badge", { text: "コア" }) : null,
-            d.frontier ? h("span.nm-badge.nm-badge--warning.ap-mini-badge", { text: "フロンティア" }) : null,
-            d.exp ? h("span.nm-badge.ap-mini-badge", { text: "経験あり" }) : null
-          )
-        )
-      )
-    )
+    dnaList(res.practiceTop)
   );
 }
 

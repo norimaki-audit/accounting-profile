@@ -290,10 +290,18 @@ h2,
 }
 
 .ap-quiz-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: baseline;
+  gap: 4px var(--space-2);
   margin-bottom: var(--space-1);
+}
+
+/* コア（STEP 1）か任意パート（STEP 2）かを常に見せる */
+.ap-quiz-stage {
+  grid-column: 1 / -1;
+  justify-self: start;
+  font-size: 0.625rem;
 }
 
 .ap-quiz-page {
@@ -580,6 +588,52 @@ h2,
   margin-bottom: var(--space-1);
 }
 
+/* 任意パートへの導線（コアだけで結果を見た人に出す） */
+
+.ap-continue {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-left: 3px solid var(--brand-500);
+}
+
+.ap-continue-kicker {
+  font-size: 0.625rem;
+  color: var(--brand-700);
+  letter-spacing: 0.08em;
+}
+
+.ap-continue-title {
+  font-size: 1.125rem;
+  margin: 2px 0 var(--space-1);
+}
+
+.ap-continue-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ap-continue-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-label);
+}
+
+.ap-continue-layer {
+  flex: none;
+  min-width: 124px;
+  font-size: 0.6875rem;
+  color: var(--brand-700);
+}
+
+.ap-continue .nm-btn {
+  width: 100%;
+}
+
 /* 象徴ビジュアル（アーキタイプのキャラクター） */
 
 .ap-visual-card {
@@ -663,33 +717,20 @@ h2,
   animation: apMarquee calc(var(--ap-marquee-count, 15) * 2.6s) linear infinite;
 }
 
-.ap-marquee:hover .ap-marquee-track,
-.ap-marquee:focus-within .ap-marquee-track {
-  animation-play-state: paused;
-}
-
 @keyframes apMarquee {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
 
+/* 押せない装飾タイル。アーキタイプ名は出さない（先に中身が分かってしまうため） */
 .ap-marquee-tile {
   flex: none;
-  width: 108px;
-  margin-right: var(--space-3);
-  padding: 0;
+  width: 92px;
+  margin-right: var(--space-2);
   border: 1px solid var(--border-default);
   border-radius: 2px;
   background: var(--surface-card);
   overflow: hidden;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  transition: border-color var(--duration-fast) var(--ease-standard);
-}
-
-.ap-marquee-tile:hover {
-  border-color: var(--brand-500);
 }
 
 .ap-marquee-img {
@@ -698,14 +739,6 @@ h2,
   aspect-ratio: 1;
   object-fit: cover;
   background: var(--surface-muted);
-}
-
-.ap-marquee-name {
-  display: block;
-  padding: 6px 8px;
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  color: var(--text-primary);
 }
 
 /* 自動スクロールを止める設定では、手でスクロールできる帯にする */
@@ -870,7 +903,7 @@ h2,
   margin-top: 3px;
 }
 
-/* Subject / Practice DNA */
+/* Subject / Practice DNA — 選択操作の集計なので数値ではなく理由タグで見せる */
 
 .ap-dna-list {
   display: flex;
@@ -878,50 +911,28 @@ h2,
   gap: var(--space-2);
 }
 
-.ap-dna-row {
+.ap-dna-item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-
-.ap-dna-row--practice {
-  gap: var(--space-2);
   flex-wrap: wrap;
+  gap: 6px var(--space-3);
 }
 
-.ap-dna-label {
-  width: 120px;
+.ap-dna-name {
   flex: none;
+  min-width: 128px;
   font-size: var(--font-size-label);
+  font-weight: 600;
 }
 
-.ap-dna-label--wide {
-  width: 132px;
-}
-
-.ap-dna-bar {
-  flex: 1;
-  min-width: 100px;
-}
-
-.ap-dna-score {
-  width: 32px;
-  flex: none;
-  text-align: right;
-  font-size: var(--font-size-label);
-  color: var(--brand-800);
-  font-weight: 700;
-}
-
-.ap-dna-badges {
+.ap-dna-tags {
   display: flex;
-  gap: 4px;
-  width: 118px;
-  flex: none;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
-.ap-mini-badge {
-  font-size: 0.625rem;
+.ap-dna-tag {
+  font-size: 0.6875rem;
 }
 
 /* Study Behavior — 各指標1問なのでバーではなく3段のタグで見せる */
@@ -1274,24 +1285,9 @@ h2,
     grid-column: auto;
   }
 
-  /* ラベルを1行目に独立させ、バー・スコア・バッジを2行目へ折り返す */
-  .ap-dna-row,
-  .ap-dna-row--practice {
-    flex-wrap: wrap;
-    gap: 4px var(--space-2);
-  }
-
-  .ap-dna-label,
-  .ap-dna-label--wide {
-    width: 100%;
-  }
-
-  .ap-dna-bar {
-    min-width: 80px;
-  }
-
-  .ap-dna-badges {
-    width: auto;
+  /* 科目・領域名を1行目に独立させ、タグを2行目へ折り返す */
+  .ap-dna-name {
+    min-width: 100%;
   }
 
   .ap-quiz-nav .nm-btn {

@@ -129,8 +129,15 @@ export const animals = {
   BXSD: "キツネ", BXSC: "カメレオン", BXAD: "イルカ", BXAC: "ネコ",
 };
 
-export const characterImage = (code) => `./assets/archetypes/${code}.jpg`;
-export const characterThumb = (code) => `./assets/archetypes/thumb/${code}.jpg`;
+// アーキタイプ別の静的ページ（/t/{CODE}/）からも同じスクリプトを読み込むため、
+// 画像のパスは document ではなくこのモジュールの位置を基準に解決する。
+const asset = (path) => new URL(`../assets/${path}`, import.meta.url).href;
+
+export const characterImage = (code) => asset(`archetypes/${code}.jpg`);
+export const characterThumb = (code) => asset(`archetypes/thumb/${code}.jpg`);
+
+/** サイトのルート URL（末尾スラッシュ付き）。共有リンクの組み立てに使う。 */
+export const siteRoot = () => new URL("../", import.meta.url).href;
 
 let availablePromise = null;
 

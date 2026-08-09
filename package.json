@@ -1,0 +1,10 @@
+{
+  "name": "accounting-profile",
+  "private": true,
+  "type": "module",
+  "description": "ビルド不要の静的サイト。依存パッケージはなく、scripts/ の Node スクリプトから src/*.js を ES モジュールとして読むためだけに置いています。",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build:pages": "node scripts/build-archetype-pages.mjs"
+  }
+}

@@ -7,7 +7,7 @@
 // 画像生成もファイル書き出しもすべてブラウザ内で完結する（外部送信なし）。
 
 import * as D from "./data.js";
-import { habitLines, studyGroups, studyLabel } from "./scoring.js";
+import { habitLines, missingLayers, studyGroups, studyLabel } from "./scoring.js";
 
 const SHEET_WIDTH = 1080;
 const SCALE = 2;
@@ -164,6 +164,33 @@ function drawCard(ctx, y, height) {
   ctx.lineWidth = 1;
   ctx.stroke();
   return { x: PAD + 32, w: SHEET_WIDTH - PAD * 2 - 64 };
+}
+
+// DNA タグの配色（画面側の nm-badge / nm-badge--brand / nm-badge--warning に対応）
+const DNA_TAG_STYLE = {
+  "面白い": [C.brand50, C.brand300, C.brand800],
+  "コア": [C.brand50, C.brand300, C.brand800],
+  "フロンティア": [C.amberBg, C.amberBd, C.amber],
+};
+const DNA_TAG_PLAIN = [C.muted, C.border, C.secondary];
+
+/** Subject / Practice DNA の 1 行（科目・領域名 + 理由タグ）。 */
+function drawDnaRow(ctx, d, x, y) {
+  drawText(ctx, d.label, x, y + 4, { font: gothic(16), color: C.text });
+  let tx = x + 240;
+  d.tags.forEach((label) => {
+    const [bg, bd, fg] = DNA_TAG_STYLE[label] || DNA_TAG_PLAIN;
+    ctx.font = gothic(13, 600);
+    const bw = ctx.measureText(label).width + 20;
+    ctx.fillStyle = bg;
+    roundRect(ctx, tx, y - 11, bw, 24, 12);
+    ctx.fill();
+    ctx.strokeStyle = bd;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawText(ctx, label, tx + 10, y + 5, { font: gothic(13, 600), color: fg });
+    tx += bw + 7;
+  });
 }
 
 function sectionTitle(ctx, title, note, x, y) {
@@ -340,59 +367,36 @@ export async function renderProfileSheet(result, code) {
     y += cardH + 20;
   }
 
-  // --- Subject DNA
+  // --- Subject DNA（1項目1行。数値は出さず、選ばれた理由をタグで並べる）
   if (result.subjectTop && result.subjectTop.length) {
-    const cardH = 78 + result.subjectTop.length * 44;
-    const { x, w } = drawCard(ctx, y, cardH);
+    const cardH = 104 + result.subjectTop.length * 42;
+    const { x } = drawCard(ctx, y, cardH);
     let cy = y + 46;
     cy = sectionTitle(ctx, "Subject DNA", "— 好きな科目（性格スコアには影響しません）", x, cy);
-    cy += 12;
+    drawText(ctx, "点数ではなく、その科目を選んだ理由をそのまま並べています。", x, cy, {
+      font: gothic(13), color: C.faint,
+    });
+    cy += 30;
     result.subjectTop.forEach((d) => {
-      drawText(ctx, d.label, x, cy + 4, { font: gothic(16), color: C.text });
-      drawBar(ctx, x + 200, cy - 6, w - 260, 11, d.score);
-      drawText(ctx, String(d.score), x + w, cy + 4, {
-        font: mono(16, 700), color: C.brand800, align: "right",
-      });
-      cy += 44;
+      drawDnaRow(ctx, d, x, cy);
+      cy += 42;
     });
     y += cardH + 20;
   }
 
   // --- Practice DNA
   if (result.practiceTop && result.practiceTop.length) {
-    const cardH = 106 + result.practiceTop.length * 48;
-    const { x, w } = drawCard(ctx, y, cardH);
+    const cardH = 104 + result.practiceTop.length * 42;
+    const { x } = drawCard(ctx, y, cardH);
     let cy = y + 46;
     cy = sectionTitle(ctx, "Practice DNA", "— 興味のある実務領域", x, cy);
     drawText(ctx, "経験がない領域は「これから」なだけです。コア=好き×やりたい、フロンティア=未経験×やりたい。", x, cy, {
       font: gothic(13), color: C.faint,
     });
-    cy += 32;
+    cy += 30;
     result.practiceTop.forEach((d) => {
-      drawText(ctx, d.label, x, cy + 4, { font: gothic(16), color: C.text });
-      drawBar(ctx, x + 230, cy - 6, w - 470, 11, d.score);
-      drawText(ctx, String(d.score), x + w - 160, cy + 4, {
-        font: mono(16, 700), color: C.brand800, align: "right",
-      });
-      // バッジ
-      let bx = x + w - 148;
-      const badges = [];
-      if (d.core) badges.push(["コア", C.brand50, C.brand300, C.brand800]);
-      if (d.frontier) badges.push(["フロンティア", C.amberBg, C.amberBd, C.amber]);
-      if (d.exp) badges.push(["経験あり", C.muted, C.border, C.secondary]);
-      badges.forEach(([label, bg, bd, fg]) => {
-        ctx.font = gothic(12, 600);
-        const bw = ctx.measureText(label).width + 18;
-        ctx.fillStyle = bg;
-        roundRect(ctx, bx, cy - 11, bw, 22, 11);
-        ctx.fill();
-        ctx.strokeStyle = bd;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        drawText(ctx, label, bx + 9, cy + 4, { font: gothic(12, 600), color: fg });
-        bx += bw + 6;
-      });
-      cy += 48;
+      drawDnaRow(ctx, d, x, cy);
+      cy += 42;
     });
     y += cardH + 20;
   }
@@ -472,19 +476,28 @@ export async function renderProfileSheet(result, code) {
 
   // --- フッター
   {
-    const { x, w } = drawCard(ctx, y, 152);
+    // コアだけで保存した場合、何が載っていないシートなのかを画像自体に残す
+    const missing = missingLayers(result);
+    const footerH = missing.length ? 178 : 152;
+    const { x, w } = drawCard(ctx, y, footerH);
     let cy = y + 40;
+    if (missing.length) {
+      drawText(ctx, `未回答のレイヤー: ${missing.map((m) => m.name).join(" / ")}（続きを答えると5レイヤーそろいます）`, x, cy, {
+        font: gothic(13, 600), color: C.amber,
+      });
+      cy += 26;
+    }
     drawText(ctx, "この画像はお使いのブラウザ内で生成しました。回答も結果もサーバーには保存されていません。", x, cy, {
       font: gothic(14, 600), color: C.brand800,
     });
     cy += 26;
-    cy = drawParagraph(ctx, D.DISCLAIMER_RESULT, x, cy, w, {
+    drawParagraph(ctx, D.DISCLAIMER_RESULT, x, cy, w, {
       font: gothic(13), color: C.secondary, lineHeight: 22,
     });
-    drawText(ctx, `作成 ${formatDate(new Date())}  ·  #会計人プロフィール`, x, y + 128, {
+    drawText(ctx, `作成 ${formatDate(new Date())}  ·  #会計人プロフィール`, x, y + footerH - 24, {
       font: mono(12), color: C.faint,
     });
-    y += 152 + PAD;
+    y += footerH + PAD;
   }
 
   // --- 実寸で切り出す
@@ -545,12 +558,16 @@ export function downloadJson(result, code, ans, ops) {
         bipolar: a.tie,
       })),
       personality: result.bf,
-      subjectDna: result.subjectTop,
-      practiceDna: result.practiceTop,
+      // DNA は数値ではなく「選ばれた理由」のタグで持つ（w は表示順のための内部値なので出さない）
+      subjectDna: (result.subjectTop || []).map((d) => ({ label: d.label, tags: d.tags })),
+      practiceDna: (result.practiceTop || []).map((d) => ({
+        label: d.label, tags: d.tags, core: d.core, frontier: d.frontier, experienced: d.exp,
+      })),
       studyBehavior: result.study,
       studyGroups: studyGroups(result).map((g) => ({ tier: g.key, label: g.title, items: g.names })),
       studyLabel: studyLabel(result) || null,
     },
+    missingLayers: missingLayers(result).map((m) => m.name),
     // 生データ。将来の設問改訂に備え項目単位で保持する（設計書 §12）。
     raw: { answers: ans, operations: ops },
     disclaimer: D.DISCLAIMER_RESULT,

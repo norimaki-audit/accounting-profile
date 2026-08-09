@@ -111,6 +111,12 @@ function scorePersonality(ans, items) {
   return out;
 }
 
+// 僅差の軸（|s| <= 2、pct <= 63）は、1 問ぶんの答え方で極が入れ替わる。
+// これを「測定の不確かさ」として警告するのではなく、どちらの極も使える人という
+// 持ち味として扱う（本サービスは心理検査ではないため、注記ではなくタグで出す）。
+export const SOFT_MAX_PCT = 63;
+export const isSoftAxis = (pct) => pct != null && pct <= SOFT_MAX_PCT;
+
 /** Work Style: 軸ごと 4 問を極方向に合計 s(−8..+8) → pct = round(50 + 50|s|/8)。s≥0 で左極。 */
 function scoreWorkStyle(ans, items) {
   return D.styleAxes.map((ax, ai) => {
@@ -120,11 +126,12 @@ function scoreWorkStyle(ans, items) {
       const v = ans[i];
       if (!isMissing(v)) s += q.p === ax.L ? v : -v;
     });
+    const pct = Math.round(50 + (50 * Math.abs(s)) / 8);
     return {
       ax,
-      letter: s >= 0 ? ax.L : ax.R,   // s=0 は既定極 + 「両極型」注記
-      tie: s === 0,
-      pct: Math.round(50 + (50 * Math.abs(s)) / 8),
+      letter: s >= 0 ? ax.L : ax.R,   // s=0 は既定極
+      pct,
+      soft: isSoftAxis(pct),
       s,
     };
   });
@@ -208,6 +215,32 @@ export function computeResult(ans, ops) {
   };
 }
 
+// アーキタイプ名に前置する修飾語。
+//
+// Work Style 4 軸のうち 3 軸は Big Five と意味が重なる（推論=開放性 / 進め方=誠実性 /
+// 作業様式=外向性）。そこから修飾語を採ると同じことを二度言うだけになるので、
+// 重ならない 協調性(A) と 情動安定性(S) の 2 特性だけを使う。
+// どちらも 50 から十分離れていないときは修飾語を付けない（全員にラベルを貼らない）。
+const MODIFIERS = {
+  A: { hi: "まわりを立てる", lo: "率直な" },
+  S: { hi: "動じない", lo: "機微に気づく" },
+};
+const MODIFIER_MIN_GAP = 20;   // 70 以上 または 30 以下
+
+/** 突出した特性から修飾語を 1 つ選ぶ。突出がなければ null。 */
+export function archetypeModifier(result) {
+  if (!result || !result.bf) return null;
+  let best = null;
+  Object.keys(MODIFIERS).forEach((tr) => {
+    const v = result.bf[tr];
+    if (v == null) return;
+    const gap = Math.abs(v - 50);
+    if (gap < MODIFIER_MIN_GAP) return;
+    if (!best || gap > best.gap) best = { gap, word: MODIFIERS[tr][v >= 50 ? "hi" : "lo"] };
+  });
+  return best ? best.word : null;
+}
+
 /**
  * まだ答えていない任意レイヤーの一覧（結果画面の「続きへ」導線に使う）。
  * コアだけで結果を見た人と、最後まで答えた人で同じ結果画面を使い回すための判定。
@@ -227,12 +260,10 @@ export function missingLayers(result) {
 
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */
 export function resultFromPcts(code, pcts) {
-  const axes = D.styleAxes.map((ax, i) => ({
-    ax,
-    letter: code[i],
-    tie: false,
-    pct: Math.max(50, Math.min(100, pcts[i])),
-  }));
+  const axes = D.styleAxes.map((ax, i) => {
+    const pct = Math.max(50, Math.min(100, pcts[i]));
+    return { ax, letter: code[i], pct, soft: isSoftAxis(pct) };
+  });
   return { code, axes, bf: null, study: null, subjectTop: null, practiceTop: null, fromAnswers: false };
 }
 

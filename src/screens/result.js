@@ -2,7 +2,7 @@ import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
   evidence, studyGroups, studyOn, studyLabel, habitLines,
-  missingLayers, pages, corePageCount,
+  missingLayers, archetypeModifier, pages, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { downloadSheet } from "../export.js";
@@ -21,7 +21,7 @@ export function renderResult() {
   const personal = !state.preview && res && res.fromAnswers ? res : null;
   const axes = !state.preview && res
     ? res.axes
-    : D.styleAxes.map((ax, i) => ({ ax, letter: code[i], tie: false, pct: null }));
+    : D.styleAxes.map((ax, i) => ({ ax, letter: code[i], pct: null, soft: false }));
 
   // 象徴ビジュアルはヘッダー直後に置く。回答直後に最初に見たいのはキャラクターであって、
   // 注意書きやダウンロードの案内ではないため、それらより前に出す。
@@ -48,7 +48,7 @@ export function renderResult() {
   const missing = missingLayers(personal);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
-    renderHeader(tp, res, code),
+    renderHeader(tp, res, code, archetypeModifier(personal)),
     visual,
     personal ? renderContinuePanel(missing) : null,
     personal ? renderDownloadPanel(personal, code, missing) : null,
@@ -106,7 +106,7 @@ function firstIncompleteOptionalPage() {
 
 // ---------------------------------------------------------------- ヘッダー
 
-function renderHeader(tp, res, code) {
+function renderHeader(tp, res, code, mod) {
   // 共有リンクからの復元は「自分の結果」ではないので、その旨と復元範囲を明示する
   const shared = !state.preview && res && !res.fromAnswers;
   const kicker = state.preview
@@ -127,6 +127,9 @@ function renderHeader(tp, res, code) {
 
   return h("div.ap-result-head", {},
     h("div.nm-mono.ap-result-kicker", { style: anim("tmPop", 0), text: kicker }),
+    // 修飾語はアーキタイプ名の一部ではなく「あなたにかかる形容」。名前より一段小さく
+    // 別の行に置くことで、共有先で素の名前だけになっても別タイプに見えないようにする。
+    mod ? h("div.ap-serif.ap-result-modifier", { style: anim("tmPop", 90), text: mod }) : null,
     h("h2.ap-result-name", { style: anim("tmPop", 130), text: tp.name }),
     h("p.ap-serif.ap-result-copy", { style: anim("tmPop", 260), text: `「${tp.copy}」` }),
     state.preview
@@ -353,7 +356,8 @@ function renderWorkStyle(axes) {
             })
           ),
           h("div.ap-axis-bar", {}, fill, h("div.ap-axis-center"), marker),
-          a.tie ? h("p.nm-supporting-text.ap-axis-tie", { text: "この軸はほぼ中間（両極型）です。" }) : null
+          // 僅差の軸は「どちらも使える持ち味」として出す（測定の但し書きにはしない）
+          a.soft ? h("span.ap-axis-soft", { text: "どっちもいける" }) : null
         );
       })
     )

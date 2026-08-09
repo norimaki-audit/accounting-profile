@@ -8,7 +8,7 @@
 // 「回答の続きから再開する」用途は localStorage の下書き（state.js）が担っている。
 
 import * as D from "./data.js";
-import { habitLines, missingLayers, studyGroups, studyLabel } from "./scoring.js";
+import { archetypeModifier, habitLines, missingLayers, studyGroups, studyLabel } from "./scoring.js";
 
 const SHEET_WIDTH = 1080;
 const SCALE = 2;
@@ -292,20 +292,27 @@ export async function renderProfileSheet(result, code) {
   }
   const heroTextWidth = (character ? charX - 28 : SHEET_WIDTH - PAD) - PAD;
 
-  drawText(ctx, "YOUR ARCHETYPE", PAD, y + 96, {
+  // 修飾語があるぶんだけ、ヒーローの各行を下へずらす
+  const mod = archetypeModifier(result);
+  drawText(ctx, "YOUR ARCHETYPE", PAD, y + (mod ? 88 : 96), {
     font: mono(13), color: "rgba(255,255,255,.78)",
   });
-  drawText(ctx, tp.name, PAD, y + 156, { font: mincho(52), color: "#ffffff" });
+  if (mod) {
+    drawText(ctx, mod, PAD, y + 124, { font: mincho(24, 400), color: "rgba(255,255,255,.9)" });
+  }
+  drawText(ctx, tp.name, PAD, y + (mod ? 178 : 156), { font: mincho(52), color: "#ffffff" });
   const animal = D.animals[code];
   if (animal) {
-    drawText(ctx, animal, PAD, y + 190, { font: gothic(15, 600), color: "rgba(255,255,255,.82)" });
+    drawText(ctx, animal, PAD, y + (mod ? 210 : 190), {
+      font: gothic(15, 600), color: "rgba(255,255,255,.82)",
+    });
   }
-  drawParagraph(ctx, `「${tp.copy}」`, PAD, y + 226, heroTextWidth, {
+  drawParagraph(ctx, `「${tp.copy}」`, PAD, y + (mod ? 246 : 226), heroTextWidth, {
     font: mincho(22, 400), color: "rgba(255,255,255,.94)", lineHeight: 34,
   });
   drawParagraph(
     ctx,
-    "アーキタイプは Work Style から生成する SNS 向けのラベルです。心理学的なタイプ判定ではありません。",
+    "Work Style（仕事の進め方）から作るラベルです。心理タイプの判定ではありません。",
     PAD, y + heroH - 22, heroTextWidth,
     { font: gothic(13), color: "rgba(255,255,255,.78)", lineHeight: 20 }
   );
@@ -317,7 +324,7 @@ export async function renderProfileSheet(result, code) {
     const cardH = 78 + rows * 66;
     const { x, w } = drawCard(ctx, y, cardH);
     let cy = y + 46;
-    cy = sectionTitle(ctx, "Work Style", "— 会計実務の進め方（独自4軸・優劣ではありません）", x, cy);
+    cy = sectionTitle(ctx, "Work Style", "— 仕事の進め方（優劣ではありません）", x, cy);
     cy += 8;
     result.axes.forEach((a) => {
       const winLeft = a.letter === a.ax.L;
@@ -331,10 +338,18 @@ export async function renderProfileSheet(result, code) {
         font: mono(16, !winLeft ? 700 : 500), color: !winLeft ? C.brand800 : C.faint, align: "right",
       });
       drawAxisBar(ctx, x, cy + 12, w, 14, a.pct ?? 50, winLeft);
-      if (a.tie) {
-        drawText(ctx, "この軸はほぼ中間（両極型）です。", x, cy + 48, {
-          font: gothic(13), color: C.faint,
-        });
+      // 僅差の軸は持ち味として小さなタグで（画面側 .ap-axis-soft と対応）
+      if (a.soft) {
+        const label = "どっちもいける";
+        ctx.font = gothic(12, 600);
+        const bw = ctx.measureText(label).width + 18;
+        ctx.fillStyle = C.brand50;
+        roundRect(ctx, x, cy + 36, bw, 22, 11);
+        ctx.fill();
+        ctx.strokeStyle = C.brand300;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        drawText(ctx, label, x + 9, cy + 51, { font: gothic(12, 600), color: C.brand800 });
       }
       cy += 66;
     });

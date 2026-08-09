@@ -508,6 +508,14 @@ h2,
   margin-bottom: var(--space-3);
 }
 
+/* 性格から取る修飾語。名前より一段小さくし、アーキタイプ名と別の階層に見せる */
+.ap-result-modifier {
+  font-size: 1.0625rem;
+  font-weight: 400;
+  color: var(--brand-700);
+  margin-bottom: 2px;
+}
+
 .ap-result-name {
   margin: 0 0 var(--space-1);
   font-size: 1.75rem;
@@ -873,8 +881,18 @@ h2,
   box-shadow: var(--shadow-raised);
 }
 
-.ap-axis-tie {
-  margin: 4px 0 0;
+/* 僅差の軸。警告ではなく持ち味のタグとして出す */
+.ap-axis-soft {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-300);
+  background: var(--brand-50);
+  color: var(--brand-800);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.6;
 }
 
 /* Personality */

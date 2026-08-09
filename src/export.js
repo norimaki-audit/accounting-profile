@@ -7,7 +7,7 @@
 // 画像生成もファイル書き出しもすべてブラウザ内で完結する（外部送信なし）。
 
 import * as D from "./data.js";
-import { habitLines, studyLabel, topStudy } from "./scoring.js";
+import { habitLines, studyGroups, studyLabel } from "./scoring.js";
 
 const SHEET_WIDTH = 1080;
 const SCALE = 2;
@@ -32,6 +32,13 @@ const C = {
   amber: "#704a0d",
   amberBg: "#fbf2e2",
   amberBd: "#e8d5ae",
+};
+
+// Study Behavior の 3 段タグ（画面側 .ap-study-tag と対応させる）
+const TAG_STYLE = {
+  on: { bg: C.brand50, border: C.brand300, fg: C.brand800, title: C.brand800, weight: 600 },
+  mid: { bg: C.muted, border: C.border, fg: C.secondary, title: C.secondary, weight: 400 },
+  off: { bg: C.card, border: C.border, fg: C.faint, title: C.secondary, weight: 400, dash: true },
 };
 
 const mincho = (px, w = 600) =>
@@ -390,32 +397,57 @@ export async function renderProfileSheet(result, code) {
     y += cardH + 20;
   }
 
-  // --- Study Behavior
-  const studyEntries = result.study
-    ? Object.entries(result.study).filter(([, v]) => v != null)
-    : [];
-  if (studyEntries.length) {
-    const rows = Math.ceil(studyEntries.length / 2);
-    const cardH = 106 + rows * 40;
-    const { x, w } = drawCard(ctx, y, cardH);
+  // --- Study Behavior（各指標1問なのでバーではなく3段のタグで見せる。画面表示と揃える）
+  const groups = studyGroups(result);
+  if (groups.length) {
+    const contentW = SHEET_WIDTH - PAD * 2 - 64;
+    // タグは幅で折り返すため、カード高さを決める前に行数を測っておく
+    const laid = groups.map((g) => {
+      const style = TAG_STYLE[g.key];
+      ctx.font = gothic(14, style.weight);
+      const rows = [[]];
+      let used = 0;
+      g.names.forEach((name) => {
+        const tw = ctx.measureText(name).width + 22;
+        if (used && used + tw > contentW) { rows.push([]); used = 0; }
+        rows[rows.length - 1].push({ name, tw });
+        used += tw + 8;
+      });
+      return { g, style, rows };
+    });
+    const cardH = 100 + laid.reduce((sum, l) => sum + 24 + l.rows.length * 36, 0);
+    const { x } = drawCard(ctx, y, cardH);
     let cy = y + 46;
     const label = studyLabel(result);
     cy = sectionTitle(ctx, "Study Behavior", label ? `— ${label}` : "", x, cy);
-    drawText(ctx, "各指標1問による参考値です。固定的な「学習タイプ」の判定ではありません。", x, cy, {
+    drawText(ctx, "各指標1問の回答をそのまま並べたものです。点数でも学習タイプの判定でもありません。", x, cy, {
       font: gothic(13), color: C.faint,
     });
-    cy += 30;
-    const colW = (w - 32) / 2;
-    studyEntries.forEach(([name, v], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const cx = x + col * (colW + 32);
-      const ry = cy + row * 40;
-      drawText(ctx, name, cx, ry + 4, { font: gothic(14), color: C.text });
-      drawBar(ctx, cx + 110, ry - 4, colW - 155, 8, v);
-      drawText(ctx, String(v), cx + colW, ry + 4, {
-        font: mono(14, 700), color: C.brand800, align: "right",
+    cy += 34;
+    laid.forEach(({ g, style, rows }) => {
+      drawText(ctx, g.title, x, cy, { font: mono(13, 700), color: style.title });
+      const titleW = ctx.measureText(g.title).width;
+      drawText(ctx, g.note, x + titleW + 12, cy, { font: gothic(12), color: C.faint });
+      cy += 12;
+      rows.forEach((row) => {
+        let tx = x;
+        row.forEach(({ name, tw }) => {
+          ctx.fillStyle = style.bg;
+          roundRect(ctx, tx, cy, tw, 28, 14);
+          ctx.fill();
+          ctx.strokeStyle = style.border;
+          ctx.lineWidth = 1;
+          if (style.dash) ctx.setLineDash([4, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          drawText(ctx, name, tx + 11, cy + 19, {
+            font: gothic(14, style.weight), color: style.fg,
+          });
+          tx += tw + 8;
+        });
+        cy += 36;
       });
+      cy += 12;
     });
     y += cardH + 20;
   }
@@ -499,7 +531,6 @@ export async function downloadSheet(result, code) {
 
 /** 回答の生データ + スコアを JSON で保存する（読み込めば結果を再表示できる）。 */
 export function downloadJson(result, code, ans, ops) {
-  const top = topStudy(result);
   const payload = {
     app: "accounting-profile",
     schema: 1,
@@ -517,7 +548,8 @@ export function downloadJson(result, code, ans, ops) {
       subjectDna: result.subjectTop,
       practiceDna: result.practiceTop,
       studyBehavior: result.study,
-      studyLabel: top.length === 2 ? `${top[0][0]}→${top[1][0]}型` : null,
+      studyGroups: studyGroups(result).map((g) => ({ tier: g.key, label: g.title, items: g.names })),
+      studyLabel: studyLabel(result) || null,
     },
     // 生データ。将来の設問改訂に備え項目単位で保持する（設計書 §12）。
     raw: { answers: ans, operations: ops },

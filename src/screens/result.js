@@ -1,6 +1,6 @@
 import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
-import { evidence, topStudy, studyLabel, habitLines } from "../scoring.js";
+import { evidence, studyGroups, studyOn, studyLabel, habitLines } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { downloadSheet, downloadJson } from "../export.js";
 
@@ -104,25 +104,20 @@ function shareUrl(res, code) {
     : base;
 }
 
+/**
+ * 共有本文はスマホのタイムラインで折りたたまれない長さに収める。
+ * 全レイヤーを並べると 9 行を超えて画面の半分を占めてしまうため、
+ * アーキタイプ名・動物・キャッチコピーだけに絞る（本文3行 + タグ + URL）。
+ * 残りのレイヤーはリンク先の結果画面で見てもらう。
+ */
 function shareToX(res, code, tp) {
-  const axes = !state.preview && res ? res.axes : [];
-  const axLine = axes
-    .filter((a) => a.pct != null)
-    .map((a) => `${a.letter === a.ax.L ? a.ax.lName : a.ax.rName} ${a.pct}`)
-    .join(" / ");
-
-  let text = `ACCOUNTING PROFILE\n${tp.name}\n「${tp.copy}」`;
-  if (axLine) text += `\nWORK ${axLine}`;
-  const personal = !state.preview && res && res.fromAnswers ? res : null;
-  if (personal?.subjectTop?.length) {
-    text += `\nSUBJECT ${personal.subjectTop.slice(0, 2).map((d) => d.label).join(" / ")}`;
-  }
-  if (personal?.practiceTop?.length) {
-    text += `\nPRACTICE ${personal.practiceTop.slice(0, 3).map((d) => d.label).join(" / ")}`;
-  }
-  const top = personal ? topStudy(personal) : [];
-  if (top.length) text += `\nSTUDY ${top[0][0]} ${top[0][1]}`;
-  text += "\n#会計人プロフィール\n";
+  const animal = D.animals[code];
+  const text = [
+    "ACCOUNTING PROFILE",
+    animal ? `${tp.name}（${animal}）` : tp.name,
+    `「${tp.copy}」`,
+    "#会計人プロフィール",
+  ].join("\n");
 
   window.open(
     `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl(res, code))}`,
@@ -386,10 +381,16 @@ function renderPractice(res) {
   );
 }
 
+/**
+ * Study Behavior は各指標 1 問しかない。0–100 のバーで出すと「当てはまらない」と
+ * 答えただけの指標が空バーとして並び、測れていないように見えてしまう。
+ * 1 問ぶんの情報量に見合うタグ表示にし、「当てはまらない」側も欠落ではなく
+ * 「これから試せる」として置く。
+ */
 function renderStudy(res) {
   if (!res || !res.study) return null;
-  const entries = Object.entries(res.study).filter(([, v]) => v != null);
-  if (!entries.length) return null;
+  const groups = studyGroups(res);
+  if (!groups.length) return null;
   const label = studyLabel(res);
 
   return h("div.nm-surface.ap-card", {},
@@ -398,14 +399,18 @@ function renderStudy(res) {
       label ? h("span.nm-badge.nm-badge--brand.ap-study-label", { text: label }) : null
     ),
     h("p.nm-supporting-text.ap-card-lead", {
-      text: "各指標1問による参考値です。固定的な「学習タイプ」の判定ではありません。",
+      text: "各指標1問の回答をそのまま並べたものです。点数でも、固定的な「学習タイプ」の判定でもありません。",
     }),
-    h("div.ap-study-grid", {},
-      entries.map(([name, v]) =>
-        h("div.ap-study-row", {},
-          h("span.ap-study-name", { text: name }),
-          h("div.ap-bar.ap-bar--sm", {}, h("div.ap-bar-fill", { style: `width:${v}%` })),
-          h("span.nm-number.ap-study-score", { text: String(v) })
+    h("div.ap-study-groups", {},
+      groups.map((g) =>
+        h("div.ap-study-group", { "data-tier": g.key },
+          h("div.ap-study-group-head", {},
+            h("span.nm-mono.ap-study-group-title", { text: g.title }),
+            h("span.nm-supporting-text.ap-study-group-note", { text: g.note })
+          ),
+          h("div.ap-study-tags", {},
+            g.names.map((name) => h("span.ap-study-tag", { text: name }))
+          )
         )
       )
     )
@@ -441,8 +446,8 @@ function renderMap(axes, res, code, tp) {
   if (res?.practiceTop?.length) {
     satellites.push({ k: "PRACTICE DNA", v: res.practiceTop.slice(0, 3).map((d) => d.label).join(" / ") });
   }
-  const top = res ? topStudy(res) : [];
-  if (top.length) satellites.push({ k: "STUDY", v: top.map((s) => `${s[0]} ${s[1]}`).join(" / ") });
+  const on = studyOn(res);
+  if (on.length) satellites.push({ k: "STUDY", v: on.join(" / ") });
 
   return card(
     "Profile Map",

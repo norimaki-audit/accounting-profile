@@ -924,36 +924,64 @@ h2,
   font-size: 0.625rem;
 }
 
-/* Study Behavior */
+/* Study Behavior — 各指標1問なのでバーではなく3段のタグで見せる */
 
-.ap-study-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2) var(--space-4);
-}
-
-.ap-study-row {
+.ap-study-groups {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ap-study-group-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  margin-bottom: 6px;
 }
 
-.ap-study-name {
-  width: 72px;
-  flex: none;
-  font-size: var(--font-size-supporting);
+.ap-study-group-title {
+  font-size: var(--font-size-label);
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
-.ap-study-row .ap-bar {
-  flex: 1;
-}
-
-.ap-study-score {
-  width: 26px;
-  flex: none;
-  text-align: right;
-  font-size: var(--font-size-supporting);
+.ap-study-group[data-tier="on"] .ap-study-group-title {
   color: var(--brand-800);
+}
+
+.ap-study-group-note {
+  font-size: 0.6875rem;
+}
+
+.ap-study-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ap-study-tag {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: var(--font-size-label);
+  line-height: 1.5;
+}
+
+.ap-study-group[data-tier="on"] .ap-study-tag {
+  border-color: var(--brand-300);
+  background: var(--brand-50);
+  color: var(--brand-800);
+  font-weight: 600;
+}
+
+.ap-study-group[data-tier="off"] .ap-study-tag {
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-muted);
 }
 
 /* 日々の傾向 */
@@ -1226,10 +1254,6 @@ h2,
 /* ---------------------------------------------------------------- 狭い画面 */
 
 @media (max-width: 480px) {
-  .ap-study-grid {
-    grid-template-columns: 1fr;
-  }
-
   .ap-map-cards {
     grid-template-columns: 1fr;
   }

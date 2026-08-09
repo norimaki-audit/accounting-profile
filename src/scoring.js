@@ -174,8 +174,8 @@ export function evidence(result, ans) {
   });
 }
 
-/** Study の上位 2 指標（補助ラベル・傾向文に使用） */
-export function topStudy(result) {
+/** Study の上位 2 指標（補助ラベルの生成にのみ使用） */
+function topStudy(result) {
   if (!result.study) return [];
   return Object.entries(result.study)
     .filter(([, v]) => v != null)
@@ -183,17 +183,51 @@ export function topStudy(result) {
     .slice(0, 2);
 }
 
+// Study Behavior は各指標 1 問しかない。0–100 のバーで見せると「0 と答えた／低めに
+// 答えただけ」が空バーとして並び、実際より欠落した印象になる。1 問ぶんの情報量に見合う
+// 「当てはまる／どちらともいえない／当てはまらない」の 3 段のタグとして扱う。
+// 「当てはまらない」も欠点ではなく「これから試せる」として置く。
+export const STUDY_TIERS = [
+  { key: "on", title: "いまの学習スタイル", note: "「当てはまる」と答えた項目" },
+  { key: "mid", title: "ときどき", note: "「どちらともいえない」" },
+  { key: "off", title: "これから試せる", note: "いまは当てはまらない項目" },
+];
+
+/** 0–100 のスコア（0/25/50/75/100 のいずれか）を 3 段のどれかに割り当てる。 */
+export const studyTier = (v) => (v >= 75 ? "on" : v >= 50 ? "mid" : "off");
+
+/** Study を 3 段にまとめる。空の段は返さない。 */
+export function studyGroups(result) {
+  if (!result || !result.study) return [];
+  const buckets = { on: [], mid: [], off: [] };
+  Object.entries(result.study).forEach(([name, v]) => {
+    if (v != null) buckets[studyTier(v)].push(name);
+  });
+  return STUDY_TIERS
+    .map((tier) => ({ ...tier, names: buckets[tier.key] }))
+    .filter((g) => g.names.length);
+}
+
+/** 「いまの学習スタイル」に入った指標名。傾向文・SNS 表示に使う。 */
+export function studyOn(result) {
+  const g = studyGroups(result).find((x) => x.key === "on");
+  return g ? g.names : [];
+}
+
 /** Study の補助ラベル（例:「演習先行→エラー分析型」）。SNS 向けの表現であり分類ではない。 */
 export function studyLabel(result) {
+  // 上位が「当てはまる」に届いていないときは、型として名乗らせない
   const top = topStudy(result);
-  return top.length === 2 ? `${top[0][0]}→${top[1][0]}型` : "";
+  return top.length === 2 && top[0][1] >= 75 && top[1][1] >= 75
+    ? `${top[0][0]}→${top[1][0]}型`
+    : "";
 }
 
 /** 「日々の傾向」の行。断定を避け「〜しやすい」の表現に留める。 */
 export function habitLines(result, code) {
   const tp = D.types[code];
   if (!tp) return [];
-  const top = topStudy(result);
+  const on = studyOn(result);
   const lines = [
     { k: "仕事では", v: `${tp.tsuyomi}が自然に出やすい` },
     { k: "調べ物は", v: D.habits[code[0]] },
@@ -201,8 +235,8 @@ export function habitLines(result, code) {
     { k: "チームでは", v: tp.kyodo },
     { k: "意見が割れたら", v: D.habits[code[1]] },
   ];
-  if (top.length) {
-    lines.push({ k: "勉強では", v: `${top[0][0]}を軸にした学習が定着している（${top[0][1]}）` });
+  if (on.length) {
+    lines.push({ k: "勉強では", v: `${on.slice(0, 2).join("・")}を取り入れた学習になりやすい` });
   }
   if (result.practiceTop && result.practiceTop.length) {
     const labels = result.practiceTop.slice(0, 3).map((d) => d.label).join("・");

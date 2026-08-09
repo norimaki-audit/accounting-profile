@@ -14,7 +14,7 @@
 //   node scripts/build-archetype-pages.mjs
 //   （data.js のアーキタイプや画像を変えたら再実行してコミットする）
 
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, rm, access } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,7 +29,9 @@ const SITE = "https://norimaki-audit.github.io/accounting-profile";
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function page(code) {
+const exists = (p) => access(p).then(() => true, () => false);
+
+function page(code, hasImage) {
   const tp = types[code];
   const animal = animals[code];
   const title = `${tp.name}（${animal}） — 会計人プロフィール`;
@@ -37,7 +39,16 @@ function page(code) {
   const url = `${SITE}/t/${code}/`;
   // 720×720 の正方形。twitter:card=summary は正方形サムネイルで表示されるため、
   // 中央を切られずにキャラクターが出る（summary_large_image は 1.91:1 に切り抜かれる）。
+  // 画像が未用意のアーキタイプでは og:image を出さない（404 を指すと壊れたカードになる）。
   const image = `${SITE}/assets/archetypes/${code}.jpg`;
+  const imageTags = hasImage
+    ? `    <meta property="og:image" content="${image}">
+    <meta property="og:image:width" content="720">
+    <meta property="og:image:height" content="720">
+    <meta property="og:image:alt" content="${esc(`${tp.name}のキャラクター（${animal}）`)}">
+    <meta name="twitter:image" content="${image}">
+`
+    : "";
 
   return `<!doctype html>
 <html lang="ja">
@@ -54,14 +65,9 @@ function page(code) {
     <meta property="og:url" content="${url}">
     <meta property="og:title" content="${esc(title)}">
     <meta property="og:description" content="${esc(`「${tp.copy}」${tp.tokucho}`)}">
-    <meta property="og:image" content="${image}">
-    <meta property="og:image:width" content="720">
-    <meta property="og:image:height" content="720">
-    <meta property="og:image:alt" content="${esc(`${tp.name}のキャラクター（${animal}）`)}">
-    <meta name="twitter:card" content="summary">
+${imageTags}    <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="${esc(title)}">
     <meta name="twitter:description" content="${esc(`「${tp.copy}」${tp.tokucho}`)}">
-    <meta name="twitter:image" content="${image}">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,9 +93,18 @@ function page(code) {
 
 const outDir = join(ROOT, "t");
 await rm(outDir, { recursive: true, force: true });
+const withoutImage = [];
 for (const code of typeOrder) {
+  const hasImage = await exists(join(ROOT, "assets", "archetypes", `${code}.jpg`));
+  if (!hasImage) withoutImage.push(code);
   const dir = join(outDir, code);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "index.html"), page(code), "utf8");
+  await writeFile(join(dir, "index.html"), page(code, hasImage), "utf8");
 }
 console.log(`generated ${typeOrder.length} pages under t/`);
+if (withoutImage.length) {
+  console.warn(
+    `warning: og:image なしで生成したアーキタイプ: ${withoutImage.join(", ")}\n` +
+    `  assets/archetypes/{CODE}.jpg（720x720）を置いてから再実行するとカードに絵が出ます。`
+  );
+}

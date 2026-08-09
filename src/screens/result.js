@@ -23,10 +23,13 @@ export function renderResult() {
     ? res.axes
     : D.styleAxes.map((ax, i) => ({ ax, letter: code[i], tie: false, pct: null }));
 
+  // 象徴ビジュアルはヘッダー直後に置く。回答直後に最初に見たいのはキャラクターであって、
+  // 注意書きやダウンロードの案内ではないため、それらより前に出す。
+  const visual = renderVisual(tp, code);
+
   const sections = [];
   const push = (node) => { if (node) sections.push(node); };
 
-  push(renderVisual(tp, code));
   push(renderWorkStyle(axes));
   push(renderPersonality(personal));
   push(renderSubject(personal));
@@ -36,7 +39,8 @@ export function renderResult() {
   push(renderMap(axes, personal, code, tp));
   push(renderDescription(tp));
 
-  sections.forEach((node, i) => {
+  // ビジュアルを先頭にした順で、以降のセクションを順に立ち上げる
+  [visual, ...sections].forEach((node, i) => {
     const style = anim("tmUp", 250 * (i + 1));
     if (style) node.setAttribute("style", `${node.getAttribute("style") || ""};${style}`);
   });
@@ -45,6 +49,7 @@ export function renderResult() {
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code),
+    visual,
     personal ? renderContinuePanel(missing) : null,
     personal ? renderDownloadPanel(personal, code, missing) : null,
     sections,

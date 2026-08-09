@@ -1,6 +1,6 @@
 import { h, btn, scrollTop } from "../ui.js";
 import * as D from "../data.js";
-import { answeredCount, totalCount, computeResult } from "../scoring.js";
+import { answeredCount, totalCount, coreCount, optionalCount, computeResult } from "../scoring.js";
 import { state, setState, loadDraft, saveDraft, clearDraft } from "../state.js";
 import { parseSavedFile } from "../export.js";
 
@@ -36,7 +36,7 @@ export function renderHome() {
   const canResume = saved > 0 && saved < totalCount();
 
   return h("div", { "data-screen-label": "トップ", class: "ap-home" },
-    h("div.nm-mono.ap-kicker", { text: "5 LAYERS · 1 PROFILE · 約5〜8分" }),
+    h("div.nm-mono.ap-kicker", { text: "5 LAYERS · 1 PROFILE · まず41問" }),
     h("h1.ap-hero-title", {}, "あなたの会計人としての", h("br"), "すべてを、一枚に。"),
     h("p.ap-lead", {},
       "会計士・税理士・経理・受験生のためのプロフィールメーカー。性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを",
@@ -45,6 +45,10 @@ export function renderHome() {
     ),
 
     renderMarquee(),
+
+    h("p.nm-supporting-text.ap-home-steps", {
+      text: `まず${coreCount()}問（性格・仕事の進め方）に答えるとアーキタイプが出ます。残り${optionalCount()}問は任意で、答えると科目・実務・勉強のレイヤーが加わります。`,
+    }),
 
     h("div.ap-home-actions", {},
       btn("button.nm-btn.nm-btn--primary.nm-btn--lg.ap-cta", { onClick: startQuiz, text: "プロフィールを作る" }),

@@ -174,6 +174,12 @@ h2,
   color: var(--text-primary);
 }
 
+.ap-home-steps {
+  margin: var(--space-3) 0 0;
+  max-width: 48ch;
+  line-height: 1.8;
+}
+
 .ap-home-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1263,6 +1269,59 @@ h2,
 }
 
 /* ---------------------------------------------------------------- 狭い画面 */
+
+/*
+ * スマホでは画面の外側のリズムだけを一段詰める。
+ * デスクトップ向けの space-6/7（32/48px）をそのまま縦に積むと、
+ * 折りたたみ前に本題（CTA・キャラクター）が入りきらないため。
+ * カード内部の余白は読みやすさに効くので触らない。
+ */
+@media (max-width: 600px) {
+  .ap-main {
+    padding-bottom: var(--space-6);
+  }
+
+  .ap-home {
+    padding: var(--space-5) 0 var(--space-5);
+  }
+
+  .ap-home-actions {
+    margin: var(--space-5) 0;
+  }
+
+  .ap-marquee {
+    margin: var(--space-4) 0 var(--space-2);
+  }
+
+  .ap-privacy,
+  .ap-disclaimer {
+    margin-top: var(--space-5);
+  }
+
+  .ap-quiz {
+    padding: var(--space-4) 0 var(--space-6);
+  }
+
+  .ap-result {
+    padding-top: var(--space-4);
+  }
+
+  .ap-result-head {
+    padding: var(--space-2) 0 var(--space-4);
+  }
+
+  /* シェアだけ1行使い、コピーと作り直しは2列に並べる（3つ縦積みだと絵が押し下がる） */
+  .ap-result-actions .nm-btn--primary {
+    flex: 1 0 100%;
+  }
+
+  .ap-result-actions .nm-btn--secondary,
+  .ap-result-actions .nm-btn--tertiary {
+    flex: 1;
+    min-width: 0;
+    padding-inline: var(--space-2);
+  }
+}
 
 @media (max-width: 480px) {
   .ap-map-cards {

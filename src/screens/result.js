@@ -5,7 +5,7 @@ import {
   missingLayers, pages, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
-import { downloadSheet, downloadJson } from "../export.js";
+import { downloadSheet } from "../export.js";
 
 const anim = (name, delay) =>
   prefersReducedMotion() ? null : `animation:${name} var(--ap-anim-${name}) ${delay}ms both`;
@@ -129,15 +129,12 @@ function renderHeader(tp, res, code) {
     h("div.nm-mono.ap-result-kicker", { style: anim("tmPop", 0), text: kicker }),
     h("h2.ap-result-name", { style: anim("tmPop", 130), text: tp.name }),
     h("p.ap-serif.ap-result-copy", { style: anim("tmPop", 260), text: `「${tp.copy}」` }),
-    h("p.nm-supporting-text.ap-result-note", {
-      text: "アーキタイプは仕事の進め方（Work Style）から生成するSNS向けのラベルです。心理学的なタイプ判定ではありません。",
-    }),
     state.preview
       ? h("p.ap-preview-note", { text: "※ 図鑑のプレビュー表示です（あなたの結果ではありません）" })
       : null,
     shared
       ? h("p.ap-preview-note", {
-          text: "※ 共有リンクからの表示です。リンクに含まれるのは Work Style とアーキタイプだけで、性格・科目・実務・勉強の各レイヤーは共有されません。",
+          text: "※ 共有リンクからの表示です。含まれるのは Work Style とアーキタイプだけです。",
         })
       : null,
     h("div.ap-result-actions", {},
@@ -150,7 +147,12 @@ function renderHeader(tp, res, code) {
         text: state.preview || shared ? "自分のプロフィールを作る" : "もう一度作る",
         onClick: retake,
       })
-    )
+    ),
+    // 名前の由来はここでしか説明できないので残す。ただし読む流れを止めないよう
+    // ボタンのあと・キャラクターの手前に 1 行だけ置く。
+    h("p.nm-supporting-text.ap-result-note", {
+      text: "Work Style（仕事の進め方）から作るラベルです。心理タイプの判定ではありません。",
+    })
   );
 }
 
@@ -198,39 +200,26 @@ function retake() {
 // ---------------------------------------------------------------- ダウンロード
 
 /**
- * 結果はサーバーに保存しないため、手元に残す唯一の手段がこのダウンロードになる。
- * その事実と、いま以外は取り出せないことを明記する。
+ * 結果はサーバーに保存しないため、手元に残す手段はこの画像保存だけ。
+ * 「いま以外は取り出せない」ことは実害があるので残すが、1 行に収める。
  */
 function renderDownloadPanel(result, code, missing) {
   const status = h("p.nm-supporting-text.ap-download-status", { hidden: true });
-  const layers = 5 - missing.length;
 
-  return h("div.nm-alert.nm-alert--warning.ap-download", {},
-    h("strong.nm-alert__title", { text: "この結果はサーバーに保存されません" }),
-    h("p", {},
-      "結果を手元に残せるのは、",
-      h("strong", { text: "回答直後のいま、この結果画面と詳細を開いている間だけ" }),
-      "です。画面を閉じる・再読み込みする・「もう一度作る」を押すと、同じ結果は取り出せなくなります。必要な方はこの場でダウンロードしてください。"
-    ),
-    h("div.ap-download-actions", {},
+  return h("div.ap-download", {},
+    h("div.ap-download-row", {},
+      h("p.ap-download-lead", {},
+        h("strong", { text: "この結果は保存されません。" }),
+        "画面を閉じると同じ結果は取り出せません。",
+        missing.length ? `いまの画像には${5 - missing.length}レイヤーが入ります。` : null
+      ),
       btn("button.nm-btn.nm-btn--primary", {
-        text: "画像で保存（PNG）",
+        text: "画像で保存",
         onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
           downloadSheet(result, code)
         ),
-      }),
-      btn("button.nm-btn.nm-btn--secondary", {
-        text: "データで保存（JSON）",
-        onClick: (e) => runDownload(e.currentTarget, status, "データを保存しました。トップ画面から読み込むと再表示できます。", async () =>
-          downloadJson(result, code, state.ans, state.ops)
-        ),
       })
     ),
-    h("p.nm-supporting-text.ap-download-hint", {
-      text: missing.length
-        ? `画像はいま表示している${layers}レイヤーぶんのプロフィールシートです（残り${missing.length}レイヤーは未回答として記載されます）。続きを答えてから保存すると5レイヤーそろいます。データ（JSON）は回答の生データを含み、トップ画面から読み込むと同じ結果を再表示できます。どちらもお使いのブラウザ内で生成し、送信は行いません。`
-        : "画像は5レイヤーすべてを1枚にまとめたプロフィールシートです。データ（JSON）は回答の生データを含み、トップ画面から読み込むと同じ結果を再表示できます。どちらもお使いのブラウザ内で生成し、送信は行いません。",
-    }),
     status
   );
 }
@@ -255,25 +244,16 @@ async function runDownload(button, status, successText, task) {
   }
 }
 
-/** 詳細を読み終えた位置でもう一度ダウンロードに触れられるようにする。 */
+/** 最後まで読んだ位置から上に戻らずに保存できるようにする（文言は繰り返さない）。 */
 function renderDownloadReminder(result, code) {
   const status = h("p.nm-supporting-text.ap-download-status", { hidden: true });
-  return h("div.nm-surface.ap-download-reminder", {},
-    h("div.ap-serif.ap-download-reminder-title", { text: "結果を残す場合は、この画面を離れる前に" }),
-    h("p.nm-supporting-text", {
-      text: "サーバーには保存していないため、このページを閉じると同じ結果は再取得できません。",
-    }),
-    h("div.ap-download-actions", {},
+  return h("div.ap-download.ap-download--foot", {},
+    h("div.ap-download-row", {},
+      h("p.ap-download-lead", { text: "この画面を離れる前に。" }),
       btn("button.nm-btn.nm-btn--primary.nm-btn--sm", {
-        text: "画像で保存（PNG）",
+        text: "画像で保存",
         onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
           downloadSheet(result, code)
-        ),
-      }),
-      btn("button.nm-btn.nm-btn--secondary.nm-btn--sm", {
-        text: "データで保存（JSON）",
-        onClick: (e) => runDownload(e.currentTarget, status, "データを保存しました。", async () =>
-          downloadJson(result, code, state.ans, state.ops)
         ),
       })
     ),
@@ -344,7 +324,7 @@ function card(title, note, ...children) {
 }
 
 function renderWorkStyle(axes) {
-  return card("Work Style", "— 会計実務の進め方（独自4軸・優劣ではありません）",
+  return card("Work Style", "— 仕事の進め方（優劣ではありません）",
     h("div.ap-axis-list", {},
       axes.map((a) => {
         const winLeft = a.letter === a.ax.L;
@@ -385,10 +365,7 @@ function renderPersonality(res) {
   const keys = D.traitOrder.filter((tr) => res.bf[tr] != null);
   if (!keys.length) return null;
 
-  return card("Personality", "— 心理学研究を参考にした独自プロフィール",
-    h("p.nm-supporting-text.ap-card-lead", {
-      text: "高い・低いに良し悪しはありません。どちらの側にも持ち味があります。",
-    }),
+  return card("Personality", "— 高い・低いに良し悪しはありません",
     h("div.ap-trait-list", {},
       keys.map((tr) => {
         const t = D.traits[tr];
@@ -433,20 +410,15 @@ function dnaList(rows) {
 
 function renderSubject(res) {
   if (!res || !res.subjectTop || !res.subjectTop.length) return null;
-  return card("Subject DNA", "— 好きな科目（性格スコアには影響しません）",
-    h("p.nm-supporting-text.ap-card-lead", {
-      text: "点数ではなく、その科目を選んだ理由をそのまま並べています。",
-    }),
+  return card("Subject DNA", "— 好きな科目（点数ではなく、選んだ理由のタグです）",
     dnaList(res.subjectTop)
   );
 }
 
 function renderPractice(res) {
   if (!res || !res.practiceTop || !res.practiceTop.length) return null;
-  return card("Practice DNA", "— 興味のある実務領域",
-    h("p.nm-supporting-text.ap-card-lead", {
-      text: "経験がない領域は「これから」なだけです。コア=好き×やりたい、フロンティア=未経験×やりたい。",
-    }),
+  // コア／フロンティアはタグを読むのに定義が要るので、この 1 行だけは残す
+  return card("Practice DNA", "— コア=好き×やりたい、フロンティア=未経験×やりたい",
     dnaList(res.practiceTop)
   );
 }
@@ -466,11 +438,9 @@ function renderStudy(res) {
   return h("div.nm-surface.ap-card", {},
     h("div.nm-section-title.ap-card-title", {},
       "Study Behavior",
-      label ? h("span.nm-badge.nm-badge--brand.ap-study-label", { text: label }) : null
+      label ? h("span.nm-badge.nm-badge--brand.ap-study-label", { text: label }) : null,
+      h("span.nm-supporting-text.ap-card-note", { text: "— 各指標1問の回答です（学習タイプの判定ではありません）" })
     ),
-    h("p.nm-supporting-text.ap-card-lead", {
-      text: "各指標1問の回答をそのまま並べたものです。点数でも、固定的な「学習タイプ」の判定でもありません。",
-    }),
     h("div.ap-study-groups", {},
       groups.map((g) =>
         h("div.ap-study-group", { "data-tier": g.key },

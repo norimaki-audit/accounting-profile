@@ -63,7 +63,7 @@ export function renderQuiz() {
       h("span", { text: "4問そろったら自動で次へ進む" })
     ),
     h("p.nm-supporting-text.ap-quiz-note", {
-      text: "回答はサーバーに送信されません。中断してもこの端末に下書きが残るので、あとから続けられます。",
+      text: "回答は送信されません。中断しても続きから再開できます。",
     })
   );
 

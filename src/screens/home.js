@@ -1,15 +1,18 @@
 import { h, btn, scrollTop } from "../ui.js";
 import * as D from "../data.js";
-import { answeredCount, totalCount, coreCount, optionalCount, computeResult } from "../scoring.js";
+import {
+  answeredCount, totalCount, coreCount, optionalCount, answeredCore, computeResult,
+} from "../scoring.js";
+
+const coreAnswered = (ans) => answeredCore(ans || {}) === coreCount();
 import { state, setState, loadDraft, saveDraft, clearDraft } from "../state.js";
-import { parseSavedFile } from "../export.js";
 
 const FEATURES = [
   { kicker: "1 PERSONALITY", title: "性格", body: "Big Five（公開心理尺度を参考にした独自項目）。良し悪しの判定はしません。" },
   { kicker: "2 WORK STYLE", title: "仕事の進め方", body: "精密/俯瞰・検証/探索・構造/適応・深掘/協働の独自4軸。アーキタイプの源泉。" },
   { kicker: "3 SUBJECT DNA", title: "好きな科目", body: "会計士系・税理士系・簿記、あなたの経験に合わせた科目で聞きます。" },
   { kicker: "4 PRACTICE DNA", title: "興味のある実務", body: "経験・好き・今後やりたいを区別。未経験は「これから」なだけ。" },
-  { kicker: "5 STUDY BEHAVIOR", title: "勉強のしかた", body: "想起練習・エラー分析など実際の行動を連続スコアで。" },
+  { kicker: "5 STUDY BEHAVIOR", title: "勉強のしかた", body: "想起練習・エラー分析など、いま身についている行動をタグで。" },
 ];
 
 export function startQuiz() {
@@ -30,10 +33,28 @@ function resumeQuiz() {
   scrollTop();
 }
 
+/**
+ * 前回の結果をこの端末の下書きから作り直して表示する。
+ * 結果はサーバーにもファイルにも保存しないため、閉じたあとに見返せる唯一の手段。
+ */
+function showLastResult(draft) {
+  setState({
+    screen: "result",
+    ans: draft.ans,
+    ops: draft.ops || {},
+    result: computeResult(draft.ans, draft.ops || {}),
+    preview: false,
+    previewCode: null,
+  });
+  scrollTop();
+}
+
 export function renderHome() {
   const draft = loadDraft();
   const saved = draft ? answeredCount(draft.ans, draft.ops || {}) : 0;
   const canResume = saved > 0 && saved < totalCount();
+  // コアまで答えていれば結果を再表示できる（41問そろえばアーキタイプは確定する）
+  const canReplay = !!draft && coreAnswered(draft.ans);
 
   return h("div", { "data-screen-label": "トップ", class: "ap-home" },
     h("div.nm-mono.ap-kicker", { text: "5 LAYERS · 1 PROFILE · まず41問" }),
@@ -56,6 +77,11 @@ export function renderHome() {
         btn("button.nm-btn.nm-btn--tertiary.ap-cta-secondary", {
           onClick: resumeQuiz,
           text: `つづきから再開（${saved}問回答済み）`,
+        }),
+      canReplay && !canResume &&
+        btn("button.nm-btn.nm-btn--tertiary.ap-cta-secondary", {
+          onClick: () => showLastResult(draft),
+          text: "前回の結果をもう一度見る",
         })
     ),
 
@@ -69,7 +95,7 @@ export function renderHome() {
       )
     ),
 
-    renderPrivacyPanel(canResume),
+    renderPrivacyPanel(saved > 0),
     h("div.nm-alert.ap-disclaimer", { text: D.DISCLAIMER_HOME })
   );
 }
@@ -109,79 +135,33 @@ function buildTiles(codes) {
 }
 
 /**
- * 「結果はサーバーに保存されない」ことと、その帰結（結果を残すにはその場での
- * ダウンロードが必要なこと）を、回答を始める前に明示する。
+ * プライバシーの説明。
+ *
+ * 「サーバーに保存しない」「結果を残せるのはその場だけ」は、知らないと実害が出る
+ * （結果を失う）ので必ず見える位置に 1 行で出す。仕組みの詳細は読まなくても
+ * 困らないので <details> に畳み、読みたい人だけ開けるようにする。
  */
-function renderPrivacyPanel(canResume) {
-  const fileInput = h("input", {
-    type: "file",
-    accept: "application/json,.json",
-    class: "nm-sr-only",
-    id: "ap-restore-file",
-    onChange: onRestoreFile,
-  });
-  const message = h("p.nm-supporting-text.ap-restore-msg", { hidden: true });
-  fileInput._message = message;
-
+function renderPrivacyPanel(hasData) {
   return h("div.nm-surface.ap-privacy", {},
     h("div.nm-mono.ap-privacy-kicker", { text: "PRIVACY" }),
-    h("div.ap-serif.ap-privacy-title", { text: "回答と結果は、サーバーに保存されません" }),
-    h("ul.ap-privacy-list", {},
-      h("li", { text: "採点も結果表示も、すべてお使いのブラウザの中だけで行います。回答内容が送信されることはありません。" }),
-      h("li", { text: "保存するのは「回答途中の下書き」だけです。中断しても最初から答え直さずに済むよう、この端末内にのみ一時的に置いています。" }),
-      h("li", {},
-        h("strong", { text: "結果を手元に残せるのは、回答を終えた直後の結果画面を開いている間だけです。" }),
-        "画面を閉じると同じ結果は取り出せません。結果画面のダウンロードから、画像またはデータとして保存してください。"
-      )
+    h("p.ap-privacy-lead", {},
+      h("strong", { text: "回答も結果もサーバーに送りません。" }),
+      "採点はこのブラウザの中だけで行います。結果を残せるのは結果画面を開いている間だけなので、必要なら画像で保存してください。"
     ),
-    h("div.ap-privacy-actions", {},
-      h("label.nm-btn.nm-btn--secondary.nm-btn--sm", { for: "ap-restore-file", text: "保存したデータを読み込む" }),
-      fileInput,
-      canResume &&
-        btn("button.nm-btn.nm-btn--tertiary.nm-btn--sm", {
+    h("details.ap-privacy-details", {},
+      h("summary", { text: "この端末に何が残るか" }),
+      h("ul.ap-privacy-list", {},
+        h("li", { text: "回答内容（下書き）だけをこの端末に置きます。中断しても続きから再開でき、前回の結果も作り直して表示できます。" }),
+        h("li", { text: "結果そのものは保管しません。画面を閉じると、保存した画像以外には残りません。" })
+      ),
+      hasData &&
+        btn("button.nm-btn.nm-btn--tertiary.nm-btn--sm.ap-privacy-clear", {
           onClick: () => {
             clearDraft();
             setState({ ans: {}, ops: {}, page: 0 });
           },
-          text: "この端末の下書きを削除",
+          text: "この端末の回答を削除",
         })
-    ),
-    message
+    )
   );
-}
-
-function onRestoreFile(event) {
-  const input = event.currentTarget;
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const message = input._message;
-
-  const fail = (text) => {
-    message.textContent = text;
-    message.classList.add("ap-restore-msg--error");
-    message.hidden = false;
-    input.value = "";
-  };
-
-  const reader = new FileReader();
-  reader.onerror = () => fail("ファイルを読み込めませんでした。");
-  reader.onload = () => {
-    try {
-      const { answers, operations } = parseSavedFile(String(reader.result));
-      const result = computeResult(answers, operations);
-      setState({
-        ans: answers,
-        ops: operations,
-        result,
-        screen: "result",
-        preview: false,
-        previewCode: null,
-      });
-      history.replaceState(null, "", D.siteRoot());
-      scrollTop();
-    } catch (err) {
-      fail(err instanceof Error ? err.message : "ファイルを読み込めませんでした。");
-    }
-  };
-  reader.readAsText(file);
 }

@@ -1,10 +1,11 @@
 // 結果の持ち出し（ダウンロード）。
 //
-// 本アプリは結果をサーバーに保存しない。したがってユーザーが結果を手元に残す手段は
-// 「結果画面を開いている間にダウンロードする」ことだけになる。ここではその 2 形式を作る。
-//   1. PNG プロフィールシート — 5 レイヤーすべてを 1 枚にした画像
-//   2. JSON データ — 回答の生データとスコア。読み込めば結果を再表示できる
+// 本アプリは結果をサーバーに保存しないため、結果を手元に残す手段は
+// 「結果画面を開いている間に PNG プロフィールシートを保存する」ことだけ。
 // 画像生成もファイル書き出しもすべてブラウザ内で完結する（外部送信なし）。
+//
+// 以前は JSON でも書き出していたが、保存したい人にとって画像で足りるため廃止した。
+// 「回答の続きから再開する」用途は localStorage の下書き（state.js）が担っている。
 
 import * as D from "./data.js";
 import { habitLines, missingLayers, studyGroups, studyLabel } from "./scoring.js";
@@ -540,62 +541,4 @@ export async function downloadSheet(result, code) {
     blob,
     `会計人プロフィール_${safeName(D.types[code].name)}_${formatDate(new Date())}.png`
   );
-}
-
-/** 回答の生データ + スコアを JSON で保存する（読み込めば結果を再表示できる）。 */
-export function downloadJson(result, code, ans, ops) {
-  const payload = {
-    app: "accounting-profile",
-    schema: 1,
-    exportedAt: new Date().toISOString(),
-    note: "このファイルはお使いのブラウザ内で生成されました。サーバーには送信・保存されていません。会計人プロフィールのトップ画面から読み込むと結果を再表示できます。",
-    archetype: { code, name: D.types[code].name, copy: D.types[code].copy },
-    scores: {
-      workStyle: result.axes.map((a) => ({
-        axis: a.ax.name,
-        pole: a.letter === a.ax.L ? a.ax.lName : a.ax.rName,
-        score: a.pct,
-        bipolar: a.tie,
-      })),
-      personality: result.bf,
-      // DNA は数値ではなく「選ばれた理由」のタグで持つ（w は表示順のための内部値なので出さない）
-      subjectDna: (result.subjectTop || []).map((d) => ({ label: d.label, tags: d.tags })),
-      practiceDna: (result.practiceTop || []).map((d) => ({
-        label: d.label, tags: d.tags, core: d.core, frontier: d.frontier, experienced: d.exp,
-      })),
-      studyBehavior: result.study,
-      studyGroups: studyGroups(result).map((g) => ({ tier: g.key, label: g.title, items: g.names })),
-      studyLabel: studyLabel(result) || null,
-    },
-    missingLayers: missingLayers(result).map((m) => m.name),
-    // 生データ。将来の設問改訂に備え項目単位で保持する（設計書 §12）。
-    raw: { answers: ans, operations: ops },
-    disclaimer: D.DISCLAIMER_RESULT,
-  };
-  downloadBlob(
-    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
-    `会計人プロフィール_${safeName(D.types[code].name)}_${formatDate(new Date())}.json`
-  );
-}
-
-/** 保存した JSON を読み込んで回答データを取り出す。 */
-export function parseSavedFile(text) {
-  const data = JSON.parse(text);
-  if (data.app !== "accounting-profile" || !data.raw || !data.raw.answers) {
-    throw new Error("会計人プロフィールの保存ファイルではないようです。");
-  }
-  const answers = {};
-  for (const [key, value] of Object.entries(data.raw.answers)) {
-    const idx = Number(key);
-    if (!Number.isInteger(idx)) continue;
-    if (value === "NA" || (typeof value === "number" && value >= -2 && value <= 2)) {
-      answers[idx] = value;
-    }
-  }
-  const operations = {};
-  for (const [key, value] of Object.entries(data.raw.operations || {})) {
-    if (Array.isArray(value)) operations[key] = value.filter((v) => typeof v === "string");
-  }
-  if (!Object.keys(answers).length) throw new Error("回答データが読み取れませんでした。");
-  return { answers, operations };
 }

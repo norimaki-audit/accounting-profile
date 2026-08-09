@@ -23,12 +23,16 @@ export function likertItems() {
 
 // ページ分割 — セクションの切れ目とページの切れ目を一致させる。
 //
-// 「コア」= Personality + Work Style（41問・9ページ）。ここまでで結果を出す。
-// アーキタイプは Work Style から生成するので、コアだけでシェアできる形が完成する。
-// 「任意」= Study Behavior + Subject/Practice DNA（15回答・9ページ）。続けたい人だけ進む。
+// 「コア」= Work Style 16問（4ページ）だけ。アーキタイプは Work Style だけから
+// 生成するので、ここまでで動物とキャッチコピーが出そろう。Personality を
+// コアに入れないのは、アーキタイプの決定に使わない 25 問を最初に置くと
+// 「ちょっとやってみる」の範囲を超えてしまうため。
+// 「任意」= Personality 25 → Study 8 → Subject/Practice DNA 7操作。
+// 出題順はこの配列の順。likertItems() の並び（= 回答インデックス）は変えないので、
+// 順序を入れ替えても保存済みの回答はそのまま使える。
 const LIKERT_SECTIONS = [
-  { sec: "A", perPage: 5, core: true },   // Personality 25 → 5ページ
   { sec: "B", perPage: 4, core: true },   // Work Style   16 → 4ページ
+  { sec: "A", perPage: 5, core: false },  // Personality  25 → 5ページ
   { sec: "C", perPage: 4, core: false },  // Study         8 → 2ページ
 ];
 
@@ -38,6 +42,10 @@ let pagesCache = null;
  * 出題ページの一覧。
  * likert ページは { kind:"likert", sec, core, indices }、DNA ページは { kind:"op", op, core:false }。
  */
+// ページが属するレイヤー。レイヤーの切れ目でいったん結果画面へ戻す。
+const SEC_LAYER = { B: "workstyle", A: "personality", C: "study" };
+const OP_LAYER = { groups: "subject", subject: "subject", practice: "practice" };
+
 export function pages() {
   if (pagesCache) return pagesCache;
   const items = likertItems();
@@ -45,19 +53,28 @@ export function pages() {
   LIKERT_SECTIONS.forEach(({ sec, perPage, core }) => {
     const idx = items.reduce((a, q, i) => (q.sec === sec ? a.concat(i) : a), []);
     for (let i = 0; i < idx.length; i += perPage) {
-      out.push({ kind: "likert", sec, core, indices: idx.slice(i, i + perPage) });
+      out.push({ kind: "likert", sec, layer: SEC_LAYER[sec], core, indices: idx.slice(i, i + perPage) });
     }
   });
-  D.profile.ops.forEach((op) => out.push({ kind: "op", op, core: false }));
+  D.profile.ops.forEach((op) => out.push({ kind: "op", op, layer: OP_LAYER[op.kind], core: false }));
   pagesCache = out;
   return out;
+}
+
+/**
+ * そのページがレイヤーの最終ページか。
+ * ここで結果画面へ戻し、増えたレイヤーをその場で見せる（性格を足したら修飾語が付く、など）。
+ */
+export function isLayerEnd(i) {
+  const all = pages();
+  return i >= all.length - 1 || all[i + 1].layer !== all[i].layer;
 }
 
 export const pageCount = () => pages().length;
 /** コアの最終ページの次 = 任意パートの先頭ページ番号 */
 export const corePageCount = () => pages().filter((p) => p.core).length;
 
-/** コア（Personality + Work Style）の Likert インデックス */
+/** コア（Work Style）の Likert インデックス */
 export const coreIndices = () => pages().filter((p) => p.core).flatMap((p) => p.indices);
 
 export const totalCount = () => likertItems().length + D.profile.ops.length;
@@ -69,14 +86,34 @@ export function answeredCore(ans) {
   return coreIndices().filter((i) => ans[i] != null).length;
 }
 
-/** 任意パート（Study + DNA）の回答済み数 */
+/** 任意パート（Personality + Study + DNA）の回答済み数 */
 export function answeredOptional(ans, ops) {
-  const study = pages()
+  const likert = pages()
     .filter((p) => p.kind === "likert" && !p.core)
     .flatMap((p) => p.indices)
     .filter((i) => ans[i] != null).length;
   const opsDone = D.profile.ops.filter((op) => (ops[op.id] || []).length > 0).length;
-  return study + opsDone;
+  return likert + opsDone;
+}
+
+/** ページが埋まっているか（Likert は全問回答、DNA は 1 つ以上選択）。 */
+export function isPageDone(page, ans, ops) {
+  return page.kind === "op"
+    ? (ops[page.op.id] || []).length > 0
+    : page.indices.every((i) => ans[i] != null);
+}
+
+/**
+ * まだ埋まっていない最初のページ。
+ * 中断からの再開に使う。保存済みの page 番号ではなく回答から求めるので、
+ * 出題順を変えたあとに古い下書きを読んでも変なページに着地しない。
+ */
+export function firstIncompletePage(ans, ops, from = 0) {
+  const all = pages();
+  for (let i = from; i < all.length; i++) {
+    if (!isPageDone(all[i], ans, ops)) return i;
+  }
+  return Math.max(from, all.length - 1);
 }
 
 /** S0（経験資格）に応じて出題する科目リストを切り替える。未選択なら全科目。 */
@@ -248,6 +285,13 @@ export function archetypeModifier(result) {
 export function missingLayers(result) {
   if (!result || !result.fromAnswers) return [];
   const out = [];
+  // 出題順（Personality → Study → DNA）で並べる。先頭が「次に足すもの」になる。
+  if (!result.bf || D.traitOrder.every((tr) => result.bf[tr] == null)) {
+    out.push({
+      key: "personality", name: "Personality", jp: "性格",
+      n: D.bigfive.length - D.profile.dropBF.length,
+    });
+  }
   if (!studyGroups(result).length) out.push({ key: "study", name: "Study Behavior", jp: "勉強のしかた", n: D.study.length });
   if (!result.subjectTop || !result.subjectTop.length) {
     out.push({ key: "subject", name: "Subject DNA", jp: "好きな科目", n: D.profile.ops.filter((o) => o.kind === "subject" || o.kind === "groups").length });

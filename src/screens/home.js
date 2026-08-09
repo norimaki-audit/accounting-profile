@@ -1,18 +1,20 @@
 import { h, btn, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  answeredCount, totalCount, coreCount, optionalCount, answeredCore, computeResult,
+  answeredCount, totalCount, coreCount, answeredCore,
+  firstIncompletePage, computeResult,
 } from "../scoring.js";
-
-const coreAnswered = (ans) => answeredCore(ans || {}) === coreCount();
 import { state, setState, loadDraft, saveDraft, clearDraft } from "../state.js";
 
+const coreAnswered = (ans) => answeredCore(ans || {}) === coreCount();
+
+// カードの並びは出題順に合わせる。1つめが「まず答える16問」。
 const FEATURES = [
-  { kicker: "1 PERSONALITY", title: "性格", body: "Big Five（公開心理尺度を参考にした独自項目）。良し悪しの判定はしません。" },
-  { kicker: "2 WORK STYLE", title: "仕事の進め方", body: "精密/俯瞰・検証/探索・構造/適応・深掘/協働の独自4軸。アーキタイプの源泉。" },
-  { kicker: "3 SUBJECT DNA", title: "好きな科目", body: "会計士系・税理士系・簿記、あなたの経験に合わせた科目で聞きます。" },
-  { kicker: "4 PRACTICE DNA", title: "興味のある実務", body: "経験・好き・今後やりたいを区別。未経験は「これから」なだけ。" },
-  { kicker: "5 STUDY BEHAVIOR", title: "勉強のしかた", body: "想起練習・エラー分析など、いま身についている行動をタグで。" },
+  { kicker: "1 WORK STYLE", title: "仕事の進め方", body: "精密/俯瞰・検証/探索・構造/適応・深掘/協働の独自4軸。アーキタイプはここから決まります。" },
+  { kicker: "2 PERSONALITY", title: "性格", body: "Big Five（公開心理尺度を参考にした独自項目）。良し悪しの判定はしません。" },
+  { kicker: "3 STUDY BEHAVIOR", title: "勉強のしかた", body: "想起練習・エラー分析など、いま身についている行動をタグで。" },
+  { kicker: "4 SUBJECT DNA", title: "好きな科目", body: "会計士系・税理士系・簿記、あなたの経験に合わせた科目で聞きます。" },
+  { kicker: "5 PRACTICE DNA", title: "興味のある実務", body: "経験・好き・今後やりたいを区別。未経験は「これから」なだけ。" },
 ];
 
 export function startQuiz() {
@@ -23,13 +25,10 @@ export function startQuiz() {
 
 function resumeQuiz() {
   const draft = loadDraft();
-  setState({
-    screen: "quiz",
-    ans: draft ? draft.ans : state.ans,
-    ops: draft ? draft.ops || {} : state.ops,
-    page: draft ? draft.page || 0 : state.page,
-    preview: false,
-  });
+  const ans = draft ? draft.ans : state.ans;
+  const ops = draft ? draft.ops || {} : state.ops;
+  // 保存済みの page 番号ではなく回答から復元する（出題順を変えても正しく戻る）
+  setState({ screen: "quiz", ans, ops, page: firstIncompletePage(ans, ops), preview: false });
   scrollTop();
 }
 
@@ -57,7 +56,7 @@ export function renderHome() {
   const canReplay = !!draft && coreAnswered(draft.ans);
 
   return h("div", { "data-screen-label": "トップ", class: "ap-home" },
-    h("div.nm-mono.ap-kicker", { text: "5 LAYERS · 1 PROFILE · まず41問" }),
+    h("div.nm-mono.ap-kicker", { text: `16 ARCHETYPES · まず${coreCount()}問` }),
     h("h1.ap-hero-title", {}, "あなたの会計人としての", h("br"), "すべてを、一枚に。"),
     h("p.ap-lead", {},
       "会計士・税理士・経理・受験生のためのプロフィールメーカー。性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを",
@@ -67,8 +66,9 @@ export function renderHome() {
 
     renderMarquee(),
 
+    // 全体量を先に出すと重く見えるので、ここでは最初の16問だけを言う
     h("p.nm-supporting-text.ap-home-steps", {
-      text: `まず${coreCount()}問（性格・仕事の進め方）に答えるとアーキタイプが出ます。残り${optionalCount()}問は任意で、答えると科目・実務・勉強のレイヤーが加わります。`,
+      text: `まずは仕事の進め方の${coreCount()}問。答えるとあなたのアーキタイプ（動物）が出ます。そのあと性格などを足していくと、プロフィールが埋まっていきます。`,
     }),
 
     h("div.ap-home-actions", {},

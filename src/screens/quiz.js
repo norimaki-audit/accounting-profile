@@ -1,7 +1,7 @@
 import { h, btn, clear, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  likertItems, pages, pageCount, corePageCount,
+  likertItems, pages, pageCount, corePageCount, isPageDone, isLayerEnd,
   coreCount, optionalCount, answeredCore, answeredOptional,
   subjectPool, computeResult, NA,
 } from "../scoring.js";
@@ -80,7 +80,7 @@ function renderPage() {
 
   // 進捗はコア／任意で別々に数える。コア中に「41/56」と出すと未完了感が出るため。
   const core = onCore();
-  els.stageLabel.textContent = core ? "STEP 1 — 結果が出るまで" : "STEP 2 — 追加の3レイヤー";
+  els.stageLabel.textContent = core ? "STEP 1 — アーキタイプが出るまで" : "STEP 2 — プロフィールを埋める";
   els.stageLabel.classList.toggle("nm-badge--brand", core);
   els.pageLabel.textContent = core
     ? `PAGE ${state.page + 1} / ${corePageCount()}`
@@ -165,9 +165,8 @@ function pickLikert(idx, value, page) {
   syncProgress();
   syncNav();
 
-  // コア最終ページ・全体最終ページでは自動で進めない（結果画面へ飛ばしてしまうため）
-  const atBreak = state.page === corePageCount() - 1 || state.page === pageCount() - 1;
-  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !atBreak) {
+  // レイヤーの切れ目では自動で進めない（結果画面へ飛ばしてしまうため）
+  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !isLayerEnd(state.page)) {
     clearTimeout(advanceTimer);
     advanceTimer = setTimeout(() => goNext(), 350);
   }
@@ -284,18 +283,14 @@ function syncProgress() {
 }
 
 function isPageComplete() {
-  const page = pages()[state.page];
-  return page.kind === "op"
-    ? (state.ops[page.op.id] || []).length > 0
-    : page.indices.every((i) => state.ans[i] != null);
+  return isPageDone(pages()[state.page], state.ans, state.ops);
 }
 
 function syncNav() {
-  // コアの最後と全体の最後の 2 か所で結果画面へ抜ける
-  const isBreak = state.page === corePageCount() - 1 || state.page === pageCount() - 1;
+  // レイヤーを1つ終えるたびに結果画面へ抜ける
   els.prev.disabled = state.page === 0;
   els.next.disabled = !isPageComplete();
-  els.next.textContent = isBreak ? "結果を見る" : "つぎへ";
+  els.next.textContent = isLayerEnd(state.page) ? "結果を見る" : "つぎへ";
 }
 
 function goPrev() {
@@ -311,8 +306,8 @@ function goNext() {
   clearTimeout(advanceTimer);
   if (!isPageComplete()) return;
 
-  // コアを終えた時点で一度結果を見せる。任意パートは結果画面から続けられる。
-  if (state.page === corePageCount() - 1 || state.page === pageCount() - 1) {
+  // レイヤーを1つ終えるたびに結果を見せる。続きは結果画面の導線から。
+  if (isLayerEnd(state.page)) {
     setState({
       screen: "result",
       page: Math.min(state.page + 1, pageCount() - 1),

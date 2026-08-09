@@ -2,7 +2,7 @@ import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
   evidence, studyGroups, studyOn, studyLabel, habitLines,
-  missingLayers, archetypeModifier, pages, corePageCount,
+  missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { downloadSheet } from "../export.js";
@@ -60,18 +60,24 @@ export function renderResult() {
 }
 
 /**
- * コアの 41 問だけで結果を見た人に、残りのレイヤーへの導線を出す。
+ * Work Style 16 問だけで結果を見た人に、残りのレイヤーへの導線を出す。
  * 「途中で止めた」ではなく「ここから先は任意」と読めるようにする。
+ *
+ * 誘い文句は「次に足せるもの」で決める。修飾語（まわりを立てる 等）は Personality
+ * からしか出ないので、性格が未回答のときはそれ自体が続ける理由になる。
+ * 全体の残り問数を前面に出すと重く見えるため、出すのは次の 1 ステップの数だけ。
  */
 function renderContinuePanel(missing) {
   if (!missing.length) return null;
-  const remaining = missing.reduce((n, m) => n + m.n, 0);
+  const next = missing[0];
+  const leadsWithPersonality = next.key === "personality";
 
   return h("div.nm-surface.ap-continue", {},
     h("div.nm-mono.ap-continue-kicker", { text: "OPTIONAL" }),
-    h("div.ap-serif.ap-continue-title", { text: `あと${remaining}問で、残り${missing.length}レイヤー` }),
-    h("p.nm-supporting-text", {
-      text: "アーキタイプはここまでで確定しています。続けると次のレイヤーが結果に加わります。回答済みの内容はそのまま残ります。",
+    h("div.ap-serif.ap-continue-title", {
+      text: leadsWithPersonality
+        ? "性格を足すと、名前に一言つきます"
+        : `${next.jp}を足すと、プロフィールが埋まります`,
     }),
     h("ul.ap-continue-list", {},
       missing.map((m) =>
@@ -82,26 +88,18 @@ function renderContinuePanel(missing) {
       )
     ),
     btn("button.nm-btn.nm-btn--primary.nm-btn--lg", {
-      text: `続きを答える（${remaining}問）`,
+      text: `${next.jp}を足す（${next.n}問）`,
       onClick: () => {
-        setState({ screen: "quiz", page: firstIncompleteOptionalPage(), preview: false, previewCode: null });
+        setState({
+          screen: "quiz",
+          page: firstIncompletePage(state.ans, state.ops, corePageCount()),
+          preview: false,
+          previewCode: null,
+        });
         scrollTop();
       },
     })
   );
-}
-
-/** 任意パートのうち、まだ埋まっていない最初のページ。途中まで答えた人を続きから戻す。 */
-function firstIncompleteOptionalPage() {
-  const all = pages();
-  for (let i = corePageCount(); i < all.length; i++) {
-    const p = all[i];
-    const done = p.kind === "op"
-      ? (state.ops[p.op.id] || []).length > 0
-      : p.indices.every((j) => state.ans[j] != null);
-    if (!done) return i;
-  }
-  return corePageCount();
 }
 
 // ---------------------------------------------------------------- ヘッダー
@@ -297,6 +295,15 @@ function renderVisual(tp, code) {
     animalBadge
   );
 
+  // 画像が未用意のアーキタイプ用。絵が出せなくても「自分は何の動物か」は必ず伝える
+  // （ここを消すと、そのアーキタイプの人だけ動物のいないプロフィールになってしまう）。
+  const fallbackName = animal
+    ? h("div.ap-serif.ap-visual-fallback", {},
+        h("span.ap-visual-fallback-animal", { text: animal }),
+        h("span.nm-mono.ap-visual-fallback-note", { text: "ILLUSTRATION COMING SOON" })
+      )
+    : null;
+
   // ハンドラを先に付けてから src を与える（読み込み結果を取りこぼさないため）
   const character = h("img.ap-visual-char", {
     alt: `${tp.name}のキャラクター（${animal}）`,
@@ -304,14 +311,13 @@ function renderVisual(tp, code) {
     style: prefersReducedMotion() ? null : "animation:tmPop var(--ap-anim-tmPop) 120ms both",
     onLoad: () => band.classList.add("is-loaded"),
     onError: (e) => {
-      // 画像が未用意のアーキタイプはグラデーションのみで表示する
+      // 絵はグラデーションに戻すが、動物名バッジと帯の動物名は残す
       e.currentTarget.remove();
       band.classList.add("ap-visual--fallback");
-      animalBadge?.remove();
     },
   });
   character.src = D.characterImage(code);
-  band.append(character);
+  band.append(character, fallbackName);
 
   return h("div.nm-surface.ap-visual-card", {}, band, caption);
 }

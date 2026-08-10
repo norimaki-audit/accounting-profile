@@ -536,6 +536,47 @@ const CARD_ART = 340;          // 動物画像の一辺
 const CARD_COL = CARD_PAD + CARD_ART + 44;   // 右カラムの左端
 const SITE_LABEL = () => D.siteRoot().replace(/^https?:\/\//, "").replace(/\/$/, "");
 
+/** カードの背景（アーキタイプの2色 + 暗い膜 + 装飾）。横長・正方形で共通。 */
+function drawCardBackground(ctx, tp, w, h) {
+  const grad = ctx.createLinearGradient(0, 0, w, h);
+  grad.addColorStop(0, tp.c[0]);
+  grad.addColorStop(1, tp.c[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  // 明るい配色のアーキタイプでも白文字が沈まないよう、一枚暗い膜をかける
+  ctx.fillStyle = "rgba(0,0,0,.16)";
+  ctx.fillRect(0, 0, w, h);
+  [[210, 0.66, -0.08, 0.16, 12], [150, 0.86, 0.55, 0.13, -8], [110, 0.03, 0.72, 0.12, 24]]
+    .forEach(([size, px, py, opacity, rot]) => {
+      ctx.save();
+      ctx.translate(w * px, h * py);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+      ctx.lineWidth = 3;
+      roundRect(ctx, -size / 2, -size / 2, size, size, 4);
+      ctx.stroke();
+      ctx.restore();
+    });
+}
+
+/** 性格の一言をピルで横に並べる。描いた右端を返す。 */
+function drawPersonalityPills(ctx, labels, x, baseline) {
+  let tx = x;
+  labels.forEach((label) => {
+    ctx.font = gothic(16, 600);
+    const bw = ctx.measureText(label).width + 24;
+    ctx.fillStyle = "rgba(255,255,255,.16)";
+    roundRect(ctx, tx, baseline - 20, bw, 30, 15);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.4)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawText(ctx, label, tx + 12, baseline, { font: gothic(16, 600), color: "#ffffff" });
+    tx += bw + 8;
+  });
+  return tx - 8;
+}
+
 /**
  * 共有カードに載せる性格の一言。
  * 50 から十分離れた特性だけを、離れている順に 2 つまで。
@@ -607,26 +648,7 @@ export async function renderShareCard(result, code, opts = {}) {
   const ctx = canvas.getContext("2d");
   ctx.scale(SCALE, SCALE);
 
-  // 背景 — アーキタイプの 2 色
-  const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
-  grad.addColorStop(0, tp.c[0]);
-  grad.addColorStop(1, tp.c[1]);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-  // 明るい配色のアーキタイプでも白文字が沈まないよう、一枚暗い膜をかける
-  ctx.fillStyle = "rgba(0,0,0,.16)";
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-  [[210, 0.66, -0.08, 0.16, 12], [150, 0.86, 0.55, 0.13, -8], [110, 0.03, 0.72, 0.12, 24]]
-    .forEach(([size, px, py, opacity, rot]) => {
-      ctx.save();
-      ctx.translate(CARD_W * px, CARD_H * py);
-      ctx.rotate((rot * Math.PI) / 180);
-      ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
-      ctx.lineWidth = 3;
-      roundRect(ctx, -size / 2, -size / 2, size, size, 4);
-      ctx.stroke();
-      ctx.restore();
-    });
+  drawCardBackground(ctx, tp, CARD_W, CARD_H);
 
   drawText(ctx, "A C C O U N T I N G   P R O F I L E", CARD_PAD, 66, {
     font: mono(14), color: "rgba(255,255,255,.72)",
@@ -671,23 +693,7 @@ export async function renderShareCard(result, code, opts = {}) {
 
   // 性格の傾向。際立った特性だけを 2 つまで、高め/低めの一言で添える
   // （数値は出さない。カード上で点数の顔をさせないため）
-  const traits = personalityTags(result);
-  if (traits.length) {
-    let tx = colX;
-    const ty = mod ? 424 : 402;
-    traits.forEach((label) => {
-      ctx.font = gothic(16, 600);
-      const bw = ctx.measureText(label).width + 24;
-      ctx.fillStyle = "rgba(255,255,255,.16)";
-      roundRect(ctx, tx, ty - 20, bw, 30, 15);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.4)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      drawText(ctx, label, tx + 12, ty, { font: gothic(16, 600), color: "#ffffff" });
-      tx += bw + 8;
-    });
-  }
+  drawPersonalityPills(ctx, personalityTags(result), colX, mod ? 424 : 402);
 
   ctx.strokeStyle = "rgba(255,255,255,.25)";
   ctx.lineWidth = 1;
@@ -751,6 +757,139 @@ export async function renderShareCard(result, code, opts = {}) {
   });
 
   return canvas;
+}
+
+// ---------------------------------------------------------------- 正方形カード
+
+// Instagram 用。IG はリンクカードを持たず、キャプションのリンクも押せないので、
+// URL は画像の中に文字として入れておく（見た人が手で開くしかない）。
+const SQ = 1080;
+const SQ_PAD = 60;
+const SQ_ART = 380;
+
+/**
+ * Instagram に貼るための 1:1 カード。
+ * 横長カードと同じ要素を縦に積む。IG では画像しか手がかりが無いため、
+ * 誘い文句と URL を必ず入れる。
+ */
+export async function renderSquareCard(result, code, opts = {}) {
+  const tp = D.types[code];
+  const animal = D.animals[code];
+  const mod = archetypeModifier(result);
+  const siteLabel = opts.siteLabel || SITE_LABEL();
+  const character = await loadImage(D.characterImage(code));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = SQ * SCALE;
+  canvas.height = SQ * SCALE;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(SCALE, SCALE);
+  drawCardBackground(ctx, tp, SQ, SQ);
+
+  const mid = SQ / 2;
+  const inner = SQ - SQ_PAD * 2;
+
+  drawText(ctx, "A C C O U N T I N G   P R O F I L E", SQ_PAD, 64, {
+    font: mono(13), color: "rgba(255,255,255,.72)",
+  });
+  drawText(ctx, "会計人16タイプ", SQ - SQ_PAD, 64, {
+    font: gothic(15, 600), color: "rgba(255,255,255,.72)", align: "right",
+  });
+
+  // 動物。未用意なら枠を描かず、その下の文字だけで見せる
+  let y = 96;
+  if (character) {
+    ctx.save();
+    roundRect(ctx, mid - SQ_ART / 2, y, SQ_ART, SQ_ART, 4);
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.clip();
+    ctx.drawImage(character, mid - SQ_ART / 2, y, SQ_ART, SQ_ART);
+    ctx.restore();
+    y += SQ_ART;
+  } else {
+    y += 40;
+  }
+
+  y += mod ? 58 : 66;
+  if (mod) {
+    drawText(ctx, mod, mid, y, { font: mincho(28, 400), color: "rgba(255,255,255,.92)", align: "center" });
+    y += 62;
+  }
+  drawText(ctx, tp.name, mid, y, {
+    font: fitFont(ctx, tp.name, inner, 56, (px) => mincho(px), 36), color: "#ffffff", align: "center",
+  });
+  y += 38;
+  if (animal) {
+    drawText(ctx, animal, mid, y, { font: gothic(19, 600), color: "rgba(255,255,255,.85)", align: "center" });
+    y += 44;
+  }
+  const copy = `「${tp.copy}」`;
+  drawText(ctx, copy, mid, y, {
+    font: fitFont(ctx, copy, inner, 25, (px) => mincho(px, 400), 18),
+    color: "rgba(255,255,255,.95)", align: "center",
+  });
+  y += 16;
+
+  // 性格の一言は中央寄せにしたいので、幅を測ってから左端を決める
+  const tags = personalityTags(result);
+  if (tags.length) {
+    y += 40;
+    ctx.font = gothic(16, 600);
+    const w = tags.reduce((n, t) => n + ctx.measureText(t).width + 24, 0) + (tags.length - 1) * 8;
+    drawPersonalityPills(ctx, tags, mid - w / 2, y);
+  }
+
+  // 4 軸は縦に 4 行。横長カードのような 4 列だと正方形では窮屈になる
+  const axes = result && result.axes;
+  const footTop = axes ? SQ - SQ_PAD - 246 : SQ - SQ_PAD - 150;
+  ctx.strokeStyle = "rgba(255,255,255,.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(SQ_PAD, footTop);
+  ctx.lineTo(SQ - SQ_PAD, footTop);
+  ctx.stroke();
+
+  if (axes) {
+    axes.forEach((a, i) => {
+      const ry = footTop + 32 + i * 36;
+      const winLeft = a.letter === a.ax.L;
+      drawText(ctx, a.ax.lName, SQ_PAD, ry, {
+        font: gothic(16, winLeft ? 700 : 400),
+        color: winLeft ? "#ffffff" : "rgba(255,255,255,.55)",
+      });
+      drawText(ctx, a.ax.rName, SQ - SQ_PAD, ry, {
+        font: gothic(16, !winLeft ? 700 : 400),
+        color: !winLeft ? "#ffffff" : "rgba(255,255,255,.55)", align: "right",
+      });
+      drawCardAxisBar(ctx, SQ_PAD + 78, ry - 13, inner - 156, 11, a.pct ?? 50, winLeft);
+    });
+  } else {
+    drawParagraph(ctx, tp.tokucho, SQ_PAD, footTop + 40, inner, {
+      font: gothic(19), color: "rgba(255,255,255,.92)", lineHeight: 30,
+    });
+  }
+
+  drawText(ctx, "16問であなたのタイプが出ます", SQ_PAD, SQ - SQ_PAD - 38, {
+    font: gothic(17, 600), color: "rgba(255,255,255,.72)",
+  });
+  drawText(ctx, "#会計人プロフィール", SQ_PAD, SQ - SQ_PAD, {
+    font: gothic(16, 600), color: "rgba(255,255,255,.85)",
+  });
+  drawText(ctx, siteLabel, SQ - SQ_PAD, SQ - SQ_PAD, {
+    font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
+  });
+
+  return canvas;
+}
+
+/** 正方形カードを保存する（Instagram など、画像しか貼れない場所向け）。 */
+export async function downloadSquareCard(result, code) {
+  const canvas = await renderSquareCard(result, code);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) throw new Error("画像を生成できませんでした");
+  downloadBlob(blob, `会計人プロフィール_${safeName(D.types[code].name)}_SNS.jpg`);
 }
 
 /**

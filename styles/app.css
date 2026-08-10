@@ -593,6 +593,12 @@ h2,
   color: inherit;
 }
 
+.ap-download-actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+}
+
 .ap-download-row .nm-btn {
   flex: none;
   min-height: 42px;

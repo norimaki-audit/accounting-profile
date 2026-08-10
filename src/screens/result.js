@@ -5,7 +5,7 @@ import {
   missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
-import { buildShareFile, downloadSheet } from "../export.js";
+import { buildShareFile, downloadSheet, downloadSquareCard } from "../export.js";
 
 const anim = (name, delay) =>
   prefersReducedMotion() ? null : `animation:${name} var(--ap-anim-${name}) ${delay}ms both`;
@@ -272,12 +272,22 @@ function renderDownloadPanel(result, code, missing) {
         "画面を閉じると同じ結果は取り出せません。",
         missing.length ? `いまの画像には${5 - missing.length}レイヤーが入ります。` : null
       ),
-      btn("button.nm-btn.nm-btn--primary", {
-        text: "画像で保存",
-        onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
-          downloadSheet(result, code)
-        ),
-      })
+      h("span.ap-download-actions", {},
+        btn("button.nm-btn.nm-btn--primary", {
+          text: "画像で保存",
+          onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
+            downloadSheet(result, code)
+          ),
+        }),
+        // Instagram はリンクカードを持たず、キャプションのリンクも押せないので、
+        // 貼れるのは画像だけ。正方形を別に用意する。
+        btn("button.nm-btn.nm-btn--secondary", {
+          text: "SNS用カード",
+          onClick: (e) => runDownload(e.currentTarget, status, "SNS用の正方形カードを保存しました。", () =>
+            downloadSquareCard(result, code)
+          ),
+        })
+      )
     ),
     status
   );

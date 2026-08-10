@@ -312,8 +312,19 @@ function openInstagram(event) {
 function shareToInstagram(result, code, statusEl, button) {
   const file = squareFile;
   if (file && canUseOsShare() && navigator.canShare({ files: [file] })) {
+    // 出るのは共有シートで、Instagram はそこから利用者が選ぶ。Web からは
+    // 渡す相手を指定できないので、押した瞬間に Instagram が開くことはない。
+    // 何をすればいいのかをその場に出しておく。
+    statusEl.classList.remove("ap-download-status--error");
+    statusEl.textContent = "共有シートから Instagram を選んでください。";
+    statusEl.hidden = false;
     navigator.share({ files: [file] }).catch((err) => {
-      if (err && err.name === "AbortError") return;
+      // 閉じただけなら案内も引っ込める（やり残しがあるように見せない）
+      if (err && err.name === "AbortError") {
+        statusEl.textContent = "";
+        statusEl.hidden = true;
+        return;
+      }
       saveForInstagram(result, code, statusEl, button);
     });
     return;

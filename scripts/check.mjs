@@ -361,6 +361,9 @@ group("共有ボタン");
   ok("アプリはカスタムスキームで開く", /INSTAGRAM_APP = "instagram:\/\/app"/.test(src));
   ok("href は web のまま（アプリ未導入でリンクが壊れないように）",
     src.includes("href: INSTAGRAM_URL,") && !src.includes("href: INSTAGRAM_APP"));
+  // 押した瞬間に Instagram が開くわけではない（相手はシートで選ぶ）ので、その場に案内を出す
+  ok("共有シートを出すときに何をすればいいか出す",
+    /共有シートから Instagram を選んでください。/.test(src));
   // 共有シートの有無ではなく、アプリが在りうる端末かで判定する
   // （X のアプリ内ブラウザは canShare を持たないことがあるが、アプリは入っている）
   ok("アプリを試す判定は canShare ではなく端末",

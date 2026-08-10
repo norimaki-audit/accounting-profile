@@ -3,7 +3,7 @@ import * as D from "../data.js";
 import {
   likertItems, pages, corePageCount, isPageDone, isLayerEnd,
   activePages, nextPageIndex, coreCount, optionalCount, likertDisplayNo,
-  answeredCore, answeredOptional, subjectPool, computeResult, NA, NONE,
+  answeredCore, answeredOptional, subjectPool, computeResult, NA, NONE, EXCLUSIVE_CHOICES,
 } from "../scoring.js";
 import { state, setState, saveDraft } from "../state.js";
 
@@ -235,13 +235,16 @@ function toggleChip(op, label) {
 
   if (pos >= 0) {
     current.splice(pos, 1);
+  } else if (EXCLUSIVE_CHOICES.includes(label)) {
+    // 「とくになし」「受験経験なし」は単独でしか意味を持たないので、他を消す
+    current.length = 0;
+    current.push(label);
   } else {
-    if (label === NONE) {
-      current.length = 0;
-    } else {
-      const noneAt = current.indexOf(NONE);
-      if (noneAt >= 0) current.splice(noneAt, 1);
-    }
+    // 逆に、ふつうの選択肢を選んだら排他の選択肢を外す
+    EXCLUSIVE_CHOICES.forEach((ex) => {
+      const at = current.indexOf(ex);
+      if (at >= 0) current.splice(at, 1);
+    });
     if (current.length < op.max) current.push(label);
   }
 

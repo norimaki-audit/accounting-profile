@@ -313,8 +313,8 @@ function renderDownloadPanel(result, code, missing) {
   return h("div.ap-download", {},
     h("div.ap-download-row", {},
       h("p.ap-download-lead", {},
-        h("strong", { text: "この結果は保存されません。" }),
-        "画面を閉じると同じ結果は取り出せません。",
+        h("strong", { text: "この結果はサーバーに残りません。" }),
+        "ほかの端末で見たいときや確実に残したいときは画像で保存してください。",
         missing.length ? `いまの画像には${5 - missing.length}レイヤーが入ります。` : null
       ),
       btn("button.nm-btn.nm-btn--primary", {

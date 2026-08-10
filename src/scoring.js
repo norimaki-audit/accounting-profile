@@ -62,10 +62,14 @@ export function pages() {
 }
 
 export const NONE = "とくになし";
+export const NO_EXAM = "受験経験なし";
+
+/** 他の選択肢と同時に選べない選択肢（選ぶと他を消す・他を選ぶと消える）。 */
+export const EXCLUSIVE_CHOICES = [NONE, NO_EXAM];
 
 /** 受験経験があるか。S0 で「受験経験なし」だけを選んだ人は無し扱い。 */
 export const hasExamExperience = (ops) =>
-  (ops.S0 || []).some((g) => g !== "受験経験なし");
+  (ops.S0 || []).some((g) => g !== NO_EXAM);
 
 /**
  * そのページを出題するか。
@@ -128,6 +132,23 @@ export const optionalCount = (ops = {}) =>
   activePages(ops)
     .filter((p) => !p.core)
     .reduce((n, p) => n + (p.kind === "op" ? 1 : p.indices.length), 0);
+
+/**
+ * その人に実際に出題される回答の総数。
+ * totalCount() は常に 56 だが、受験していない人には科目3問を出さないので
+ * 上限は 53 になる。「つづきから再開」の判定はこちらで行う。
+ */
+export const plannedCount = (ops = {}) => coreCount() + optionalCount(ops);
+
+/**
+ * 「つづきから再開」を出すか。
+ * 比べる相手は totalCount()（常に56）ではなく、その人に出題される総数。
+ * 受験していない人は 53 で終わるので、56 と比べると全部答えても未完了に見える。
+ */
+export function canResume(ans, ops = {}) {
+  const saved = answeredCount(ans || {}, ops);
+  return saved > 0 && saved < plannedCount(ops);
+}
 
 /** コアの回答済み数 */
 export function answeredCore(ans) {

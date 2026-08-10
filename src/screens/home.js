@@ -1,7 +1,7 @@
 import { h, btn, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  answeredCount, totalCount, coreCount, answeredCore,
+  answeredCount, canResume as canResumeDraft, coreCount, answeredCore,
   firstIncompletePage, computeResult,
 } from "../scoring.js";
 import { state, setState, loadDraft, saveDraft, clearDraft } from "../state.js";
@@ -51,7 +51,8 @@ function showLastResult(draft) {
 export function renderHome() {
   const draft = loadDraft();
   const saved = draft ? answeredCount(draft.ans, draft.ops || {}) : 0;
-  const canResume = saved > 0 && saved < totalCount();
+  // 判定は scoring.js に置いてある（出題される総数は人によって変わるため）
+  const canResume = !!draft && canResumeDraft(draft.ans, draft.ops || {});
   // コアまで答えていれば結果を再表示できる（16問そろえばアーキタイプは確定する）
   const canReplay = !!draft && coreAnswered(draft.ans);
 
@@ -146,7 +147,7 @@ function renderPrivacyPanel(hasData) {
     h("div.nm-mono.ap-privacy-kicker", { text: "PRIVACY" }),
     h("p.ap-privacy-lead", {},
       h("strong", { text: "回答も結果もサーバーに送りません。" }),
-      "採点はこのブラウザの中だけで行います。結果を残せるのは結果画面を開いている間だけなので、必要なら画像で保存してください。"
+      "採点はこのブラウザの中だけで行います。回答が残るのはこの端末の中だけなので、ほかの端末で見たいときや確実に残したいときは画像で保存してください。"
     ),
     h("details.ap-privacy-details", {},
       h("summary", { text: "この端末に何が残るか" }),

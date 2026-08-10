@@ -38,10 +38,15 @@ function page(code, art) {
   const desc = `「${tp.copy}」${tp.tokucho} — 性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを5つの別レイヤーで可視化するプロフィールメーカー。`;
   const url = `${SITE}/t/${code}/`;
 
-  // リンクカードは大きいほうが導線になる。1.91:1 の横長カード（assets/cards/）が
+  // リンクカードは大きいほうが導線になる。横長カード（assets/cards/・2400x1350）が
   // あれば summary_large_image で大きく出す。無ければ正方形のキャラクター画像を
   // summary（小さい正方形サムネイル）で出す。どちらも無ければ画像を出さない
   // （404 を指すと壊れたカードになる）。
+  //
+  // カードは 16:9 で、X が推奨する 1.91:1 とはわずかに違う。X 側で上下が
+  // 22px ずつ切られるが、文字は上端 56px / 下端 648px の内側に収めてあるので
+  // 欠けない。厳密に 1.91:1 へ寄せる場合は CARD_H を 630 にして
+  // src/export.js のレイアウトを引き直し、16枚を作り直すこと。
   const large = art.card
     ? { url: `${SITE}/assets/cards/${code}.jpg`, w: 2400, h: 1350, card: "summary_large_image",
         alt: `${tp.name}（${animal}）のカード` }

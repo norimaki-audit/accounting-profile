@@ -146,14 +146,15 @@ function renderPrivacyPanel(hasData) {
   return h("div.nm-surface.ap-privacy", {},
     h("div.nm-mono.ap-privacy-kicker", { text: "PRIVACY" }),
     h("p.ap-privacy-lead", {},
-      h("strong", { text: "回答も結果もサーバーに送りません。" }),
-      "採点はこのブラウザの中だけで行います。回答が残るのはこの端末の中だけなので、ほかの端末で見たいときや確実に残したいときは画像で保存してください。"
+      h("strong", { text: "通常利用では回答・結果を外部へ送信しません。" }),
+      "共有操作を行った場合に限り、アーキタイプとWork Styleの結果が共有先へ渡ります。採点はこのブラウザの中だけで行います。回答が残るのはこの端末の中だけなので、ほかの端末で見たいときや確実に残したいときは画像で保存してください。"
     ),
     h("details.ap-privacy-details", {},
-      h("summary", { text: "この端末に何が残るか" }),
+      h("summary", { text: "何が端末に残り、何が共有先へ渡るか" }),
       h("ul.ap-privacy-list", {},
         h("li", { text: "回答内容（下書き）だけをこの端末に置きます。中断しても続きから再開でき、前回の結果も作り直して表示できます。" }),
-        h("li", { text: "結果そのものは保管しません。画面を閉じると、保存した画像以外には残りません。" })
+        h("li", { text: "結果そのものは保管しません。画面を閉じると、保存した画像以外には残りません。" }),
+        h("li", { text: "共有ボタンを押したときだけ、アーキタイプとWork Styleの4軸を含むリンク（または画像）が共有先のアプリへ渡ります。性格・科目・実務・勉強の回答は渡しません。" })
       ),
       hasData &&
         btn("button.nm-btn.nm-btn--tertiary.nm-btn--sm.ap-privacy-clear", {

@@ -37,6 +37,26 @@ function renderAppbar() {
 }
 
 /**
+ * 制作者の表示。
+ *
+ * 共有されて流れていった先から本人へ戻る道がこれしかないので、全画面の末尾に置く。
+ * 読み終わりの位置なので邪魔にならず、結果画面でも共有ボタンのあとに必ず目に入る。
+ */
+function renderFooter() {
+  return h("footer.ap-foot", {},
+    h("p.ap-foot-credit", {},
+      "企画・制作：",
+      h("a.ap-foot-link", {
+        href: D.AUTHOR.url,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        text: `${D.AUTHOR.name}｜${D.AUTHOR.title}　${D.AUTHOR.handle}`,
+      })
+    )
+  );
+}
+
+/**
  * 結果画面を離れたら URL をサイトのルートへ戻す。
  * /t/{CODE}/ や #p=… を残したまま別画面へ移ると、再読み込みで結果に戻ってしまうため。
  */
@@ -64,7 +84,7 @@ function render() {
 }
 
 function boot() {
-  appEl.append(renderAppbar(), h("main.ap-main", {}, screenEl));
+  appEl.append(renderAppbar(), h("main.ap-main", {}, screenEl), renderFooter());
 
   // 共有リンクからの復元。Work Style とアーキタイプのみを表示する。
   const match = (location.hash || "").match(SHARE_HASH);

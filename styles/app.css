@@ -143,6 +143,33 @@ h2,
   color: var(--text-muted);
 }
 
+/* ---------------------------------------------------------------- footer */
+
+/* 共有先からたどり着いた人が制作者へ戻れる唯一の導線。見落とされない濃さで置く */
+.ap-foot {
+  max-width: var(--ap-content-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ap-foot-credit {
+  margin: 0;
+  font-size: var(--font-size-supporting);
+  color: var(--text-secondary);
+}
+
+/* 余白を足して指で押せる高さにし、同じ分の負のマージンで見た目の位置は動かさない */
+.ap-foot-link {
+  display: inline-block;
+  padding: 12px 4px;
+  margin: -12px -4px;
+  color: var(--brand-700);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---------------------------------------------------------------- home */
 
 .ap-home {

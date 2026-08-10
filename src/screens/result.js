@@ -516,7 +516,40 @@ function renderHabits(res, code) {
   );
 }
 
+/**
+ * Profile Map は単体で 1300px 超あり、結果画面の3分の1を占める。
+ * 畳んで開いてもらう形にするが、**あることが分からないと畳んだ意味がない**ので、
+ * 見出し・中身の説明・開く合図を出したカードのまま置く。
+ * 中身は初回に開いたときに組み立てる（開かない人には作らない。
+ * 畳んだまま作ると立ち上がりのアニメーションも空振りする）。
+ */
 function renderMap(axes, res, code, tp) {
+  const note = state.preview
+    ? "このアーキタイプの人が通りやすい道すじ"
+    : "あなたの回答から、アーキタイプにたどり着くまでの道すじ";
+
+  const body = h("div.ap-map-body");
+  const details = h("details.nm-surface.ap-card.ap-map-details", {},
+    h("summary.ap-map-summary", {},
+      h("span.ap-map-summary-text", {},
+        h("span.nm-section-title.ap-card-title.ap-map-summary-title", { text: "Profile Map" }),
+        h("span.nm-supporting-text.ap-map-summary-note", { text: note })
+      ),
+      h("span.nm-mono.ap-map-summary-cue", { text: "ひらく" })
+    ),
+    body
+  );
+
+  let built = false;
+  details.addEventListener("toggle", () => {
+    if (!details.open || built) return;
+    built = true;
+    body.append(buildMap(axes, res, code, tp));
+  });
+  return details;
+}
+
+function buildMap(axes, res, code, tp) {
   const ev = res ? evidence(res, state.ans) : axes.map(() => []);
   const reduce = prefersReducedMotion();
   const line = (i) => h("div.ap-map-line", {
@@ -533,12 +566,7 @@ function renderMap(axes, res, code, tp) {
   const on = studyOn(res);
   if (on.length) satellites.push({ k: "STUDY", v: on.join(" / ") });
 
-  return card(
-    "Profile Map",
-    state.preview
-      ? "— このアーキタイプの人が通りやすい道すじです"
-      : "— 回答 → 特徴的な行動 → Work Style → アーキタイプ + プロフィール全体",
-    h("div.ap-map", {},
+  return h("div.ap-map", {},
       axes.map((a, i) => {
         const winLeft = a.letter === a.ax.L;
         const cards = ev[i] || [];
@@ -591,7 +619,6 @@ function renderMap(axes, res, code, tp) {
             ),
           ]
         : null
-    )
   );
 }
 

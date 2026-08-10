@@ -1077,6 +1077,69 @@ h2,
 
 /* Profile Map */
 
+/*
+ * Profile Map は畳んで置く（単体で 1300px 超あり、結果画面の3分の1を占めるため）。
+ * ただし畳んだ状態でも「ここに何かある」と分かる必要があるので、
+ * 見出し・中身の説明・開く合図を出したカードの見た目のまま残す。
+ */
+.ap-map-details > summary::-webkit-details-marker { display: none; }
+
+.ap-map-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  list-style: none;
+  cursor: pointer;
+}
+
+.ap-map-summary-title {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.ap-map-summary-note {
+  display: block;
+  line-height: 1.6;
+}
+
+.ap-map-summary-cue {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--brand-300);
+  border-radius: 999px;
+  background: var(--brand-50);
+  color: var(--brand-800);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+/* 開閉が分かるように矢印を添える */
+.ap-map-summary-cue::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.ap-map-details[open] .ap-map-summary-cue::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.ap-map-details[open] .ap-map-summary {
+  margin-bottom: var(--space-4);
+}
+
+.ap-map-details[open] .ap-map-summary-cue {
+  background: transparent;
+}
+
 .ap-map {
   display: flex;
   flex-direction: column;

@@ -98,6 +98,21 @@ export function isLayerEnd(i, ops = {}) {
   return next === -1 || pages()[next].layer !== pages()[i].layer;
 }
 
+// 画面に出す設問番号。回答インデックス（likertItems() の並び）ではなく
+// 出題順で振る。Work Style を先頭に移したあとも Q01 から始まるようにするため
+// （インデックスをそのまま出すと Work Style の1問目が Q26 になる）。
+let displayNoCache = null;
+export function likertDisplayNo(idx) {
+  if (!displayNoCache) {
+    displayNoCache = {};
+    pages()
+      .filter((p) => p.kind === "likert")
+      .flatMap((p) => p.indices)
+      .forEach((i, n) => { displayNoCache[i] = n + 1; });
+  }
+  return displayNoCache[idx];
+}
+
 export const pageCount = () => pages().length;
 /** コアの最終ページの次 = 任意パートの先頭ページ番号 */
 export const corePageCount = () => pages().filter((p) => p.core).length;

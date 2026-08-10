@@ -2,7 +2,7 @@ import { h, btn, clear, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
   likertItems, pages, corePageCount, isPageDone, isLayerEnd,
-  activePages, nextPageIndex, coreCount, optionalCount,
+  activePages, nextPageIndex, coreCount, optionalCount, likertDisplayNo,
   answeredCore, answeredOptional, subjectPool, computeResult, NA, NONE,
 } from "../scoring.js";
 import { state, setState, saveDraft } from "../state.js";
@@ -131,7 +131,7 @@ function renderLikertCard(q, idx, page) {
 
   const card = h("div.nm-surface.ap-q", {},
     h("div.ap-q-meta", {},
-      h("span.nm-mono.ap-q-num", { text: `Q${String(idx + 1).padStart(2, "0")}` }),
+      h("span.nm-mono.ap-q-num", { text: `Q${String(likertDisplayNo(idx)).padStart(2, "0")}` }),
       h("span.nm-badge.ap-q-badge", { text: SECTION_LABEL[q.sec] })
     ),
     h("div.ap-serif.ap-q-text", { text: q.t }),

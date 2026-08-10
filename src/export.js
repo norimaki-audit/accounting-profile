@@ -497,7 +497,7 @@ export async function renderProfileSheet(result, code) {
     drawParagraph(ctx, D.DISCLAIMER_RESULT, x, cy, w, {
       font: gothic(13), color: C.secondary, lineHeight: 22,
     });
-    drawText(ctx, `作成 ${formatDate(new Date())}  ·  #会計人プロフィール`, x, y + footerH - 24, {
+    drawText(ctx, `作成 ${formatDate(new Date())}  ·  #会計人プロフィール  ·  企画・制作 ${D.AUTHOR.handle}`, x, y + footerH - 24, {
       font: mono(12), color: C.faint,
     });
     y += footerH + PAD;
@@ -522,6 +522,10 @@ const CARD_PAD = 56;
 const CARD_ART = 340;          // 動物画像の一辺
 const CARD_COL = CARD_PAD + CARD_ART + 44;   // 右カラムの左端
 const SITE_LABEL = () => D.siteRoot().replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+// 画像は URL を持たないまま拡散する。隅に制作者を入れておかないと、
+// 保存・転載された先から本人へ戻る道が無くなる。
+const CREDIT = (siteLabel) => `${D.AUTHOR.handle}  ·  ${siteLabel}`;
 
 /** カードの背景（アーキタイプの2色 + 暗い膜 + 装飾）。横長・正方形で共通。 */
 function drawCardBackground(ctx, tp, w, h) {
@@ -701,7 +705,7 @@ export async function renderShareCard(result, code, opts = {}) {
     drawText(ctx, "#会計人プロフィール", CARD_PAD, 644, {
       font: gothic(16, 600), color: "rgba(255,255,255,.8)",
     });
-    drawText(ctx, siteLabel, CARD_W - CARD_PAD, 644, {
+    drawText(ctx, CREDIT(siteLabel), CARD_W - CARD_PAD, 644, {
       font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
     });
     return canvas;
@@ -739,7 +743,7 @@ export async function renderShareCard(result, code, opts = {}) {
   drawText(ctx, "#会計人プロフィール", CARD_PAD, 644, {
     font: gothic(16, 600), color: "rgba(255,255,255,.8)",
   });
-  drawText(ctx, siteLabel, CARD_W - CARD_PAD, 644, {
+  drawText(ctx, CREDIT(siteLabel), CARD_W - CARD_PAD, 644, {
     font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
   });
 
@@ -864,7 +868,7 @@ export async function renderSquareCard(result, code, opts = {}) {
   drawText(ctx, "#会計人プロフィール", SQ_PAD, SQ - SQ_PAD, {
     font: gothic(16, 600), color: "rgba(255,255,255,.85)",
   });
-  drawText(ctx, siteLabel, SQ - SQ_PAD, SQ - SQ_PAD, {
+  drawText(ctx, CREDIT(siteLabel), SQ - SQ_PAD, SQ - SQ_PAD, {
     font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
   });
 

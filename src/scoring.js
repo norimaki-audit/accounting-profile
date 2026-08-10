@@ -560,6 +560,7 @@ export function habitLines(result, code) {
     solid(2) ? { k: "締切前は", v: D.habits[code[2]] } : null,
     { k: "チームでは", v: tp.kyodo },
     solid(1) ? { k: "意見が割れたら", v: D.habits[code[1]] } : null,
+    solid(3) ? { k: "結論が出ないときは", v: D.habits[code[3]] } : null,
   ].filter(Boolean);
   if (on.length) {
     lines.push({ k: "勉強では", v: `${on.slice(0, 2).join("・")}を取り入れた学習になりやすい` });

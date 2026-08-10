@@ -289,6 +289,48 @@ group("同点の軸");
   eq("二択は「出題される総数」に数えない", S.answeredCount(picked, {}), 16);
 }
 
+group("経験がなく判断できない（NA）");
+{
+  // ルール: 実務経験を前提にする語を設問に入れない。だから NA の逃げ道も要らない。
+  // 例外を作るなら、その軸の左右の本数が崩れることを承知のうえで決めること。
+  const na = S.likertItems().filter((q) => q.na);
+  ok("NA を出す設問を持たない", na.length === 0, na.map((q) => q.t).join(" / "));
+
+  // 各軸は左2問・右2問。ここが崩れると、1問欠けただけで残った側へ寄る
+  ok("Work Style の各軸は左右2問ずつ", D.styleAxes.every((ax, ai) => {
+    const items = D.style.filter((q) => q.ax === ai);
+    return items.filter((q) => q.p === ax.L).length === 2
+      && items.filter((q) => q.p === ax.R).length === 2;
+  }));
+
+  // 欠測は 0 点にせず平均から外す。1問抜けても残りの答え方どおりのスコアになる
+  const items = S.likertItems();
+  const full = {};
+  items.forEach((q, i) => { if (q.sec === "A" && q.tr === "E") full[i] = q.d * 2; });
+  const idxE = items.reduce((a, q, i) => (q.sec === "A" && q.tr === "E" ? a.concat(i) : a), []);
+  const dropped = { ...full };
+  delete dropped[idxE[0]];
+  eq("全部そろえば外向性100", S.computeResult(full, {}).bf.E, 100);
+  eq("1問欠けても100のまま（0点扱いにしない）", S.computeResult(dropped, {}).bf.E, 100);
+}
+
+group("日々の傾向");
+{
+  // 見出しは habitLines() が付ける。データ側にも書き出しがあると二重になる
+  const heads = ["調べ物は", "締切前は", "意見が割れたら", "結論が出ないときは"];
+  ok("habits の文面に見出しを含めない",
+    Object.values(D.habits).every((v) => heads.every((hd) => !v.startsWith(hd))));
+  const items = S.likertItems();
+  const ans = {};
+  items.forEach((q, i) => { if (q.sec === "B") ans[i] = q.p === "P" || q.p === "V" || q.p === "S" || q.p === "D" ? 2 : -2; });
+  const r = S.computeResult(ans, {});
+  const lines = S.habitLines(r, r.code);
+  ok("行と見出しが重複しない", lines.every((l) => !l.v.startsWith(l.k)));
+  ok("4軸すべてから行が出る",
+    ["調べ物は", "締切前は", "意見が割れたら", "結論が出ないときは"].every((hd) => lines.some((l) => l.k === hd)));
+  ok("habits は8極すべてぶんある", Object.keys(D.habits).length === 8);
+}
+
 group("共有リンク");
 {
   const r = S.resultFromPcts("BVSD", [81, 69, 88, 100]);

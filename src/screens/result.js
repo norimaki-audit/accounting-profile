@@ -5,7 +5,7 @@ import {
   missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
-import { buildShareFile, buildSquareShareFile, downloadSheet, downloadSquareCard } from "../export.js";
+import { buildSquareShareFile, downloadSheet, downloadSquareCard } from "../export.js";
 
 const anim = (name, delay) =>
   prefersReducedMotion() ? null : `animation:${name} var(--ap-anim-${name}) ${delay}ms both`;
@@ -21,7 +21,7 @@ export function renderResult() {
   const personal = !state.preview && res && res.fromAnswers ? res : null;
   const axes = !state.preview && res
     ? res.axes
-    : D.styleAxes.map((ax, i) => ({ ax, letter: code[i], pct: null, soft: false }));
+    : D.styleAxes.map((ax, i) => ({ ax, letter: code[i], pct: null }));
 
   // 象徴ビジュアルはヘッダー直後に置く。回答直後に最初に見たいのはキャラクターであって、
   // 注意書きやダウンロードの案内ではないため、それらより前に出す。
@@ -47,7 +47,7 @@ export function renderResult() {
 
   const missing = missingLayers(personal, state.ops);
   // 共有ボタンが押される前に画像を用意しておく（navigator.share は待てないため）
-  if (!state.preview && res) prepareShareFiles(res, code);
+  if (!state.preview && res) prepareSquareFile(res, code);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code, archetypeModifier(personal)),
@@ -145,13 +145,16 @@ function renderHeader(tp, res, code, mod) {
     h("div.ap-result-actions", {},
       // ボタンではなく本物のリンクにする。JS で開くとポップアップ扱いになり
       // ブロックされることがあるが、リンクなら通常のタブ遷移として必ず開く。
-      // 画像を添付できる端末だけ、クリックを横取りして OS の共有シートへ回す。
+      //
+      // ここでクリックを横取りして navigator.share() に回してはいけない。
+      // 共有シートが X の代わりに開いてしまい、「押しても X が開かない」ことになる。
+      // 画像を添付したいときは Instagram ボタン（共有シート）を使う。
+      // X ではリンクカードに /t/{CODE}/ の og:image が出るので、添付は要らない。
       h("a.nm-btn.nm-btn--primary.nm-btn--lg.ap-share-link", {
         href: intentUrl(res, code, tp),
         target: "_blank",
         rel: "noopener noreferrer",
         text: "Xでシェア",
-        onClick: (e) => shareToX(e, res, code, tp),
       }),
       // Instagram は X と並ぶ共有先として独立させる。渡せるのは画像だけなので、
       // スマホは共有シート経由、デスクトップは保存して手で投稿してもらう。
@@ -193,36 +196,32 @@ function shareUrl(res, code) {
  * 画像を生成して await すると、その間に操作の権利が切れて弾かれることがあるので、
  * 押されたときには同期的に渡せる状態にしておく。
  */
-const shareFiles = { wide: null, square: null };   // 用意できた File
-let shareFilesKey = null;   // shareFiles が指す内容の指紋（そろったときだけ記録する）
-let sharePendingKey = null; // 生成中の指紋
+let squareFile = null;
+let squareFileKey = null;    // squareFile が指す内容の指紋（成功したときだけ記録する）
+let squarePendingKey = null; // 生成中の指紋
 
 /** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
 const shareKey = (result, code) =>
   [code, archetypeModifier(result) || "", result.axes.map((a) => a.pct).join(".")].join("|");
 
-function prepareShareFiles(result, code) {
-  // OS の共有シートを使わない端末（デスクトップ）では File を作らない。
-  // X はリンクで開き、Instagram はダウンロードするので、どちらも要らない。
+function prepareSquareFile(result, code) {
+  // OS の共有シートを使わない端末では File を作らない（保存で足りる）
   if (!canUseOsShare()) return;
   const key = shareKey(result, code);
   // 失敗した回でキーを覚えてしまうと二度と作り直せなくなるので、成功時だけ記録する
-  if (shareFilesKey === key || sharePendingKey === key) return;
-  shareFiles.wide = null;
-  shareFiles.square = null;
-  shareFilesKey = null;
-  sharePendingKey = key;
-  Promise.all([buildShareFile(result, code), buildSquareShareFile(result, code)])
-    .then(([wide, square]) => {
-      if (sharePendingKey !== key) return;
-      sharePendingKey = null;
-      shareFiles.wide = wide;
-      shareFiles.square = square;
-      if (wide || square) shareFilesKey = key;
+  if (squareFileKey === key || squarePendingKey === key) return;
+  squareFile = null;
+  squareFileKey = null;
+  squarePendingKey = key;
+  buildSquareShareFile(result, code)
+    .then((file) => {
+      if (squarePendingKey !== key) return;
+      squarePendingKey = null;
+      if (file) { squareFile = file; squareFileKey = key; }
     })
     .catch(() => {
-      // 作れない環境ではリンク／ダウンロードに落とす（次の描画で再挑戦できる）
-      if (sharePendingKey === key) sharePendingKey = null;
+      // 作れない環境では保存に落とす（次の描画で再挑戦できる）
+      if (squarePendingKey === key) squarePendingKey = null;
     });
 }
 
@@ -249,28 +248,6 @@ const canUseOsShare = () =>
   window.matchMedia("(pointer: coarse)").matches;
 
 /**
- * 共有ボタンのクリック。
- *
- * 既定はリンクの遷移（href に X の投稿画面が入っている）。画像を添付できる
- * 端末のときだけ横取りして OS の共有シートへ回す。横取りに失敗したら
- * preventDefault していないので、そのままリンクとして X が開く。
- */
-function shareToX(event, res, code, tp) {
-  const file = shareFiles.wide;
-  if (!file || !canUseOsShare() || !navigator.canShare({ files: [file] })) return;
-  event.preventDefault();
-  // url は別フィールドにせず本文へ入れる。受け取り側アプリによっては
-  // files + text + url のうち一部しか拾わず、本文が落ちることがあるため。
-  navigator
-    .share({ files: [file], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
-    .catch((err) => {
-      // 共有シートを閉じただけのときは、勝手に別の共有を始めない
-      if (err && err.name === "AbortError") return;
-      window.location.href = intentUrl(res, code, tp);
-    });
-}
-
-/**
  * Instagram へ。
  *
  * Instagram はリンクカードを持たず、キャプションのリンクも押せないので、
@@ -279,7 +256,7 @@ function shareToX(event, res, code, tp) {
  * 手で投稿してもらう。
  */
 function shareToInstagram(result, code, statusEl, button) {
-  const file = shareFiles.square;
+  const file = squareFile;
   if (file && canUseOsShare() && navigator.canShare({ files: [file] })) {
     navigator.share({ files: [file] }).catch((err) => {
       if (err && err.name === "AbortError") return;
@@ -464,9 +441,7 @@ function renderWorkStyle(axes) {
               text: (!winLeft && pct != null ? `${pct} ` : "") + a.ax.rName,
             })
           ),
-          h("div.ap-axis-bar", {}, fill, h("div.ap-axis-center"), marker),
-          // 僅差の軸は「どちらも使える持ち味」として出す（測定の但し書きにはしない）
-          a.soft ? h("span.ap-axis-soft", { text: "どっちもいける" }) : null
+          h("div.ap-axis-bar", {}, fill, h("div.ap-axis-center"), marker)
         );
       })
     )

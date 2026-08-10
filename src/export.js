@@ -338,19 +338,6 @@ export async function renderProfileSheet(result, code) {
         font: mono(16, !winLeft ? 700 : 500), color: !winLeft ? C.brand800 : C.faint, align: "right",
       });
       drawAxisBar(ctx, x, cy + 12, w, 14, a.pct ?? 50, winLeft);
-      // 僅差の軸は持ち味として小さなタグで（画面側 .ap-axis-soft と対応）
-      if (a.soft) {
-        const label = "どっちもいける";
-        ctx.font = gothic(12, 600);
-        const bw = ctx.measureText(label).width + 18;
-        ctx.fillStyle = C.brand50;
-        roundRect(ctx, x, cy + 36, bw, 22, 11);
-        ctx.fill();
-        ctx.strokeStyle = C.brand300;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        drawText(ctx, label, x + 9, cy + 51, { font: gothic(12, 600), color: C.brand800 });
-      }
       cy += 66;
     });
     y += cardH + 20;
@@ -893,23 +880,16 @@ export async function downloadSquareCard(result, code) {
 }
 
 /**
- * 共有カードを File にする。Web Share API に渡せなければ null。
+ * Instagram 用の正方形カードを File にする。Web Share API に渡せなければ null。
  * 写真主体のカードなので JPEG にする（PNG だと 3.5MB 程度になり、
  * スマホの共有シートに渡すには重い）。
+ *
+ * 横長カード（renderShareCard）は File にしない。X へは添付せずリンクで飛ばし、
+ * リンクカードとして /t/{CODE}/ の og:image を出す方式にしているため。
  */
-export async function buildShareFile(result, code) {
-  return toShareFile(await renderShareCardIfPossible(result, code), code, "");
-}
-
-/** Instagram 用の正方形カードを File にする。 */
 export async function buildSquareShareFile(result, code) {
   if (typeof File !== "function" || !navigator.canShare) return null;
   return toShareFile(await renderSquareCard(result, code), code, "-square");
-}
-
-async function renderShareCardIfPossible(result, code) {
-  if (typeof File !== "function" || !navigator.canShare) return null;
-  return renderShareCard(result, code);
 }
 
 async function toShareFile(canvas, code, suffix) {

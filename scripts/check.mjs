@@ -162,11 +162,11 @@ group("Work Style の境界");
   for (const v of [2, 1, 0, -1, -2]) {
     const r = uniform(v);
     ok(`全部「${D.choices.find((c) => c.v === v).label}」→ 全軸が引き分け(50)`,
-      r.axes.every((a) => a.pct === 50 && a.soft));
+      r.axes.every((a) => a.pct === 50));
   }
-  eq("引き分けの上限は63", S.SOFT_MAX_PCT, 63);
-  ok("63以下は「どっちもいける」", S.isSoftAxis(63) && S.isSoftAxis(50));
-  ok("69以上は付かない", !S.isSoftAxis(69) && !S.isSoftAxis(100));
+  ok("僅差タグ（どっちもいける）は廃止済み",
+    S.SOFT_MAX_PCT === undefined && S.isSoftAxis === undefined &&
+    S.computeResult({}, {}).axes.every((a) => !("soft" in a)));
 }
 
 group("修飾語");
@@ -236,7 +236,50 @@ group("共有リンク");
   const r = S.resultFromPcts("BVSD", [81, 69, 88, 100]);
   eq("コードから4軸を復元する", r.axes.map((a) => a.pct).join("."), "81.69.88.100");
   ok("共有リンクからは性格を復元しない", r.bf === null);
-  ok("共有リンクでも僅差タグは出せる", S.resultFromPcts("BVSD", [56, 100, 100, 100]).axes[0].soft);
+}
+
+group("共有ボタン");
+{
+  // X は「リンクとして開く」だけにする。クリックを横取りして navigator.share() を
+  // 呼ぶと、X ではなく OS の共有シートが開いてしまい、押しても X に飛べなくなる。
+  const src = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
+  const xLink = src.slice(src.indexOf("ap-share-link"), src.indexOf("ap-share-ig"));
+  ok("Xボタンはクリックを横取りしない", !/onClick/.test(xLink));
+  ok("Xボタンは新しいタブへのリンク", /href:\s*intentUrl\(/.test(xLink) && /target:\s*"_blank"/.test(xLink));
+  // 共有シートを使うのは Instagram だけ（画像しか渡せない先なので添付が要る）
+  eq("navigator.share を呼ぶのは1箇所だけ", (src.match(/navigator\.share\(\{/g) || []).length, 1);
+}
+
+group("アーキタイプの出やすさ");
+{
+  // 引き分け（合計0）をすべて同じ側に倒すと分布が大きく偏る。決定的なタイエで
+  // 左右に散らしているので、16タイプの最大／最小が極端にならないことを担保する。
+  const items = S.likertItems();
+  const pLeft = D.styleAxes.map((ax, ai) => {
+    const idx = [];
+    items.forEach((q, i) => { if (q.sec === "B" && q.ax === ai) idx.push(i); });
+    let left = 0, total = 0;
+    const walk = (k, ans) => {
+      if (k === idx.length) {
+        total++;
+        if (S.computeResult(ans, {}).axes[ai].letter === ax.L) left++;
+        return;
+      }
+      for (let v = -2; v <= 2; v++) walk(k + 1, { ...ans, [idx[k]]: v });
+    };
+    walk(0, {});
+    return left / total;
+  });
+  const probs = [];
+  for (let m = 0; m < 16; m++) {
+    let pr = 1;
+    for (let ai = 0; ai < 4; ai++) pr *= (m >> ai) & 1 ? 1 - pLeft[ai] : pLeft[ai];
+    probs.push(pr);
+  }
+  const ratio = Math.max(...probs) / Math.min(...probs);
+  ok("各軸の左右がほぼ半々（45〜55%）", pLeft.every((p) => p > 0.45 && p < 0.55),
+    pLeft.map((p) => `${(p * 100).toFixed(2)}%`).join(" / "));
+  ok("最も出やすい型と出にくい型の差が1.5倍未満", ratio < 1.5, `${ratio.toFixed(2)}倍`);
 }
 
 // ---------------------------------------------------------------- 方針の担保

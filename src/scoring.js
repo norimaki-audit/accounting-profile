@@ -217,29 +217,43 @@ function scorePersonality(ans, items) {
   return out;
 }
 
-// 僅差の軸（|s| <= 2、pct <= 63）は、1 問ぶんの答え方で極が入れ替わる。
-// これを「測定の不確かさ」として警告するのではなく、どちらの極も使える人という
-// 持ち味として扱う（本サービスは心理検査ではないため、注記ではなくタグで出す）。
-export const SOFT_MAX_PCT = 63;
-export const isSoftAxis = (pct) => pct != null && pct <= SOFT_MAX_PCT;
+/**
+ * 引き分け（s=0）をどちらの極に倒すか。
+ *
+ * 引き分けは 1 軸あたり 13.6% 起きる。これを常に左極へ倒していたため、
+ * 4 軸ぶん積み重なって特定のアーキタイプに偏っていた（一様回答で
+ * ハリネズミ 10.4% 対 ネコ 3.5%、約 3 倍）。引き分けはどちらの極を
+ * 選ぶ根拠も無いので、その軸の回答の並びから決まる値で振り分ける。
+ * 同じ回答なら必ず同じ結果になる（乱数は使わない）。
+ *
+ * 下位ビットは回答の偶奇に縛られる（引き分けの条件から合計が偶数になる）ため、
+ * 最後に撹拌してから使う。
+ */
+function tieBreaksLeft(axisIndex, vals) {
+  let h = 2166136261 ^ Math.imul(axisIndex + 1, 0x9e3779b1);
+  for (const v of vals) h = Math.imul(h ^ (v + 3), 16777619);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return ((h >>> 0) & 1) === 0;
+}
 
-/** Work Style: 軸ごと 4 問を極方向に合計 s(−8..+8) → pct = round(50 + 50|s|/8)。s≥0 で左極。 */
+/** Work Style: 軸ごと 4 問を極方向に合計 s(−8..+8) → pct = round(50 + 50|s|/8)。s>0 で左極。 */
 function scoreWorkStyle(ans, items) {
   return D.styleAxes.map((ax, ai) => {
     let s = 0;
+    const vals = [];
     items.forEach((q, i) => {
       if (q.sec !== "B" || q.ax !== ai) return;
       const v = ans[i];
+      vals.push(isMissing(v) ? 9 : v);   // 未回答も並びの一部として扱う
       if (!isMissing(v)) s += q.p === ax.L ? v : -v;
     });
     const pct = Math.round(50 + (50 * Math.abs(s)) / 8);
-    return {
-      ax,
-      letter: s >= 0 ? ax.L : ax.R,   // s=0 は既定極
-      pct,
-      soft: isSoftAxis(pct),
-      s,
-    };
+    const left = s === 0 ? tieBreaksLeft(ai, vals) : s > 0;
+    return { ax, letter: left ? ax.L : ax.R, pct, s };
   });
 }
 
@@ -396,7 +410,7 @@ export function missingLayers(result, ops = {}) {
 export function resultFromPcts(code, pcts) {
   const axes = D.styleAxes.map((ax, i) => {
     const pct = Math.max(50, Math.min(100, pcts[i]));
-    return { ax, letter: code[i], pct, soft: isSoftAxis(pct) };
+    return { ax, letter: code[i], pct };
   });
   return { code, axes, bf: null, study: null, subjectTop: null, practiceTop: null, fromAnswers: false };
 }

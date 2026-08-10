@@ -31,22 +31,31 @@ const esc = (s) =>
 
 const exists = (p) => access(p).then(() => true, () => false);
 
-function page(code, hasImage) {
+function page(code, art) {
   const tp = types[code];
   const animal = animals[code];
   const title = `${tp.name}（${animal}） — 会計人プロフィール`;
   const desc = `「${tp.copy}」${tp.tokucho} — 性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを5つの別レイヤーで可視化するプロフィールメーカー。`;
   const url = `${SITE}/t/${code}/`;
-  // 720×720 の正方形。twitter:card=summary は正方形サムネイルで表示されるため、
-  // 中央を切られずにキャラクターが出る（summary_large_image は 1.91:1 に切り抜かれる）。
-  // 画像が未用意のアーキタイプでは og:image を出さない（404 を指すと壊れたカードになる）。
-  const image = `${SITE}/assets/archetypes/${code}.jpg`;
-  const imageTags = hasImage
-    ? `    <meta property="og:image" content="${image}">
-    <meta property="og:image:width" content="720">
-    <meta property="og:image:height" content="720">
-    <meta property="og:image:alt" content="${esc(`${tp.name}のキャラクター（${animal}）`)}">
-    <meta name="twitter:image" content="${image}">
+
+  // リンクカードは大きいほうが導線になる。1.91:1 の横長カード（assets/cards/）が
+  // あれば summary_large_image で大きく出す。無ければ正方形のキャラクター画像を
+  // summary（小さい正方形サムネイル）で出す。どちらも無ければ画像を出さない
+  // （404 を指すと壊れたカードになる）。
+  const large = art.card
+    ? { url: `${SITE}/assets/cards/${code}.jpg`, w: 2400, h: 1350, card: "summary_large_image",
+        alt: `${tp.name}（${animal}）のカード` }
+    : art.square
+      ? { url: `${SITE}/assets/archetypes/${code}.jpg`, w: 720, h: 720, card: "summary",
+          alt: `${tp.name}のキャラクター（${animal}）` }
+      : null;
+  const cardType = large ? large.card : "summary";
+  const imageTags = large
+    ? `    <meta property="og:image" content="${large.url}">
+    <meta property="og:image:width" content="${large.w}">
+    <meta property="og:image:height" content="${large.h}">
+    <meta property="og:image:alt" content="${esc(large.alt)}">
+    <meta name="twitter:image" content="${large.url}">
 `
     : "";
 
@@ -68,7 +77,7 @@ function page(code, hasImage) {
     <meta property="og:url" content="${url}">
     <meta property="og:title" content="${esc(title)}">
     <meta property="og:description" content="${esc(`「${tp.copy}」${tp.tokucho}`)}">
-${imageTags}    <meta name="twitter:card" content="summary">
+${imageTags}    <meta name="twitter:card" content="${cardType}">
     <meta name="twitter:title" content="${esc(title)}">
     <meta name="twitter:description" content="${esc(`「${tp.copy}」${tp.tokucho}`)}">
 
@@ -96,18 +105,26 @@ ${imageTags}    <meta name="twitter:card" content="summary">
 
 const outDir = join(ROOT, "t");
 await rm(outDir, { recursive: true, force: true });
-const withoutImage = [];
+const noCard = [];
+const noImage = [];
 for (const code of typeOrder) {
-  const hasImage = await exists(join(ROOT, "assets", "archetypes", `${code}.jpg`));
-  if (!hasImage) withoutImage.push(code);
+  const art = {
+    card: await exists(join(ROOT, "assets", "cards", `${code}.jpg`)),
+    square: await exists(join(ROOT, "assets", "archetypes", `${code}.jpg`)),
+  };
+  if (!art.card) noCard.push(code);
+  if (!art.card && !art.square) noImage.push(code);
   const dir = join(outDir, code);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "index.html"), page(code, hasImage), "utf8");
+  await writeFile(join(dir, "index.html"), page(code, art), "utf8");
 }
 console.log(`generated ${typeOrder.length} pages under t/`);
-if (withoutImage.length) {
+if (noCard.length) {
   console.warn(
-    `warning: og:image なしで生成したアーキタイプ: ${withoutImage.join(", ")}\n` +
-    `  assets/archetypes/{CODE}.jpg（720x720）を置いてから再実行するとカードに絵が出ます。`
+    `warning: 横長カードが無いアーキタイプ: ${noCard.join(", ")}\n` +
+    `  assets/cards/{CODE}.jpg（1.91:1）を置くとリンクカードが大きく出ます。`
   );
+}
+if (noImage.length) {
+  console.warn(`warning: og:image なしで生成: ${noImage.join(", ")}`);
 }

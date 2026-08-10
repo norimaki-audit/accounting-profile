@@ -534,6 +534,24 @@ const CARD_H = 675;
 const CARD_PAD = 56;
 const CARD_ART = 340;          // 動物画像の一辺
 const CARD_COL = CARD_PAD + CARD_ART + 44;   // 右カラムの左端
+const SITE_LABEL = () => D.siteRoot().replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+/**
+ * 共有カードに載せる性格の一言。
+ * 50 から十分離れた特性だけを、離れている順に 2 つまで。
+ * 数値は載せない（カードの上で点数の顔をさせないため）。
+ */
+const PERSONALITY_TAG_MIN_GAP = 15;
+
+function personalityTags(result) {
+  if (!result || !result.bf) return [];
+  return D.traitOrder
+    .map((tr) => ({ tr, v: result.bf[tr] }))
+    .filter((t) => t.v != null && Math.abs(t.v - 50) >= PERSONALITY_TAG_MIN_GAP)
+    .sort((a, b) => Math.abs(b.v - 50) - Math.abs(a.v - 50))
+    .slice(0, 2)
+    .map((t) => `${D.traits[t.tr].jp} ${t.v >= 50 ? "高め" : "低め"}`);
+}
 
 /** 収まるまで字を詰める。長いアーキタイプ名（チームコーディネーター等）向け。 */
 function fitFont(ctx, text, maxWidth, size, makeFont, min = 34) {
@@ -574,7 +592,10 @@ function drawCardAxisBar(ctx, x, y, w, h, pct, winLeft) {
  * X に添付する 1 枚。アーキタイプの 2 色を背景に、動物・名前・キャッチコピー・4軸を置く。
  * 4軸は数値を出さずバーだけにする（縮小時に読めないうえ、点数の顔をしてしまうため）。
  */
-export async function renderShareCard(result, code) {
+export async function renderShareCard(result, code, opts = {}) {
+  // siteLabel は静的カードを書き出すとき用の上書き。開発サーバーで生成すると
+  // localhost が焼き込まれてしまうため、本番のドメインを渡せるようにしている。
+  const siteLabel = opts.siteLabel || SITE_LABEL();
   const tp = D.types[code];
   const animal = D.animals[code];
   const mod = archetypeModifier(result);
@@ -648,7 +669,26 @@ export async function renderShareCard(result, code) {
     color: "rgba(255,255,255,.95)",
   });
 
-  // 4 軸 — 横 4 列。数値は出さない
+  // 性格の傾向。際立った特性だけを 2 つまで、高め/低めの一言で添える
+  // （数値は出さない。カード上で点数の顔をさせないため）
+  const traits = personalityTags(result);
+  if (traits.length) {
+    let tx = colX;
+    const ty = mod ? 424 : 402;
+    traits.forEach((label) => {
+      ctx.font = gothic(16, 600);
+      const bw = ctx.measureText(label).width + 24;
+      ctx.fillStyle = "rgba(255,255,255,.16)";
+      roundRect(ctx, tx, ty - 20, bw, 30, 15);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      drawText(ctx, label, tx + 12, ty, { font: gothic(16, 600), color: "#ffffff" });
+      tx += bw + 8;
+    });
+  }
+
   ctx.strokeStyle = "rgba(255,255,255,.25)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -656,6 +696,25 @@ export async function renderShareCard(result, code) {
   ctx.lineTo(CARD_W - CARD_PAD, 508);
   ctx.stroke();
 
+  // 個人の結果が無いとき（アーキタイプ別ページの og:image 用）は
+  // 4軸の代わりにタイプの説明と誘い文句を置く
+  if (!result || !result.axes) {
+    drawParagraph(ctx, tp.tokucho, CARD_PAD, 556, CARD_W - CARD_PAD * 2, {
+      font: gothic(22), color: "rgba(255,255,255,.92)", lineHeight: 34,
+    });
+    drawText(ctx, "16問であなたのタイプが出ます", CARD_PAD, 606, {
+      font: gothic(18, 600), color: "rgba(255,255,255,.7)",
+    });
+    drawText(ctx, "#会計人プロフィール", CARD_PAD, 644, {
+      font: gothic(16, 600), color: "rgba(255,255,255,.8)",
+    });
+    drawText(ctx, siteLabel, CARD_W - CARD_PAD, 644, {
+      font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
+    });
+    return canvas;
+  }
+
+  // 4 軸 — 横 4 列。数値は出さない
   const cells = result.axes.length;
   const gutter = 30;
   const cellW = (CARD_W - CARD_PAD * 2 - gutter * (cells - 1)) / cells;
@@ -687,7 +746,7 @@ export async function renderShareCard(result, code) {
   drawText(ctx, "#会計人プロフィール", CARD_PAD, 644, {
     font: gothic(16, 600), color: "rgba(255,255,255,.8)",
   });
-  drawText(ctx, D.siteRoot().replace(/^https?:\/\//, "").replace(/\/$/, ""), CARD_W - CARD_PAD, 644, {
+  drawText(ctx, siteLabel, CARD_W - CARD_PAD, 644, {
     font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
   });
 

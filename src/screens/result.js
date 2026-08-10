@@ -179,7 +179,8 @@ function shareUrl(res, code) {
  * 押されたときには同期的に渡せる状態にしておく。
  */
 let shareFile = null;
-let shareFileKey = null;
+let shareFileKey = null;    // shareFile が指す内容の指紋（成功したときだけ記録する）
+let sharePendingKey = null; // 生成中の指紋
 
 /** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
 const shareKey = (result, code) =>
@@ -187,12 +188,21 @@ const shareKey = (result, code) =>
 
 function prepareShareFile(result, code) {
   const key = shareKey(result, code);
-  if (shareFileKey === key) return;
+  // 失敗した回でキーを覚えてしまうと二度と作り直せなくなるので、成功時だけ記録する
+  if (shareFileKey === key || sharePendingKey === key) return;
   shareFile = null;
-  shareFileKey = key;
+  shareFileKey = null;
+  sharePendingKey = key;
   buildShareFile(result, code)
-    .then((file) => { if (shareFileKey === key) shareFile = file; })
-    .catch(() => { /* 画像を作れない環境ではテキスト共有にフォールバックする */ });
+    .then((file) => {
+      if (sharePendingKey !== key) return;
+      sharePendingKey = null;
+      if (file) { shareFile = file; shareFileKey = key; }
+    })
+    .catch(() => {
+      // 画像を作れない環境ではテキスト共有に落とす（次の描画で再挑戦できる）
+      if (sharePendingKey === key) sharePendingKey = null;
+    });
 }
 
 const shareText = (tp) => `会計人16タイプ、私は「${tp.name}」でした\n#会計人プロフィール`;
@@ -207,14 +217,28 @@ function openIntent(res, code, tp) {
 }
 
 /**
+ * OS の共有シートを使ってよい端末か。
+ *
+ * デスクトップの Chrome / Edge も navigator.share を持っているが、開くのは
+ * Windows の共有シートで、そこに X はいない（近距離共有・Dropbox・メール等が並ぶ）。
+ * 「Xで結果をシェア」を押した人が X へ行けないので、指で触る端末に限る。
+ */
+const canUseOsShare = () =>
+  typeof navigator.canShare === "function" &&
+  navigator.maxTouchPoints > 0 &&
+  window.matchMedia("(pointer: coarse)").matches;
+
+/**
  * 画像1枚を主役にして共有する。
- * 画像を添付できない環境（デスクトップのブラウザなど）では、これまでどおり
- * テキスト + URL で開く。その場合もリンクカードにアーキタイプの動物が出る。
+ * 使えない環境ではテキスト + URL で X を開く。その場合もリンク先の
+ * og:image でアーキタイプの動物がカードに出る。
  */
 function shareToX(res, code, tp) {
-  if (shareFile && navigator.canShare?.({ files: [shareFile] })) {
+  if (shareFile && canUseOsShare() && navigator.canShare({ files: [shareFile] })) {
+    // url は別フィールドにせず本文へ入れる。受け取り側アプリによっては
+    // files + text + url のうち一部しか拾わず、本文が落ちることがあるため。
     navigator
-      .share({ files: [shareFile], text: shareText(tp), url: shareUrl(res, code) })
+      .share({ files: [shareFile], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
       .catch((err) => {
         // ユーザーが共有シートを閉じただけのときは、勝手に別の共有を始めない
         if (err && err.name === "AbortError") return;

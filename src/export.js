@@ -525,6 +525,189 @@ export async function renderProfileSheet(result, code) {
   return out;
 }
 
+// ---------------------------------------------------------------- SNS 共有カード
+
+// タイムラインで最大に出る 16:9。縦長のプロフィールシートとは別物で、
+// 縮小されても読める 5 要素（動物・修飾語・名前・キャッチコピー・4軸）だけを載せる。
+const CARD_W = 1200;
+const CARD_H = 675;
+const CARD_PAD = 56;
+const CARD_ART = 340;          // 動物画像の一辺
+const CARD_COL = CARD_PAD + CARD_ART + 44;   // 右カラムの左端
+
+/** 収まるまで字を詰める。長いアーキタイプ名（チームコーディネーター等）向け。 */
+function fitFont(ctx, text, maxWidth, size, makeFont, min = 34) {
+  let px = size;
+  while (px > min) {
+    ctx.font = makeFont(px);
+    if (ctx.measureText(text).width <= maxWidth) break;
+    px -= 2;
+  }
+  return makeFont(px);
+}
+
+/** 中心から勝ち極へ伸びる白いバー（カード用・数値は出さない）。 */
+function drawCardAxisBar(ctx, x, y, w, h, pct, winLeft) {
+  // 溝は暗くする。明るい配色のアーキタイプ（茶〜ベージュ系）だと
+  // 白い溝では塗りとの差が出ず、どちらへ寄っているか読めなくなるため。
+  ctx.fillStyle = "rgba(0,0,0,.28)";
+  roundRect(ctx, x, y, w, h, h / 2);
+  ctx.fill();
+  const center = x + w / 2;
+  const span = (w / 2) * ((pct - 50) / 50);
+  ctx.save();
+  roundRect(ctx, x, y, w, h, h / 2);
+  ctx.clip();
+  ctx.fillStyle = "#ffffff";
+  if (winLeft) ctx.fillRect(center - span, y, span, h);
+  else ctx.fillRect(center, y, span, h);
+  ctx.restore();
+  ctx.strokeStyle = "rgba(255,255,255,.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(center, y - 4);
+  ctx.lineTo(center, y + h + 4);
+  ctx.stroke();
+}
+
+/**
+ * X に添付する 1 枚。アーキタイプの 2 色を背景に、動物・名前・キャッチコピー・4軸を置く。
+ * 4軸は数値を出さずバーだけにする（縮小時に読めないうえ、点数の顔をしてしまうため）。
+ */
+export async function renderShareCard(result, code) {
+  const tp = D.types[code];
+  const animal = D.animals[code];
+  const mod = archetypeModifier(result);
+  const character = await loadImage(D.characterImage(code));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = CARD_W * SCALE;
+  canvas.height = CARD_H * SCALE;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(SCALE, SCALE);
+
+  // 背景 — アーキタイプの 2 色
+  const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+  grad.addColorStop(0, tp.c[0]);
+  grad.addColorStop(1, tp.c[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  // 明るい配色のアーキタイプでも白文字が沈まないよう、一枚暗い膜をかける
+  ctx.fillStyle = "rgba(0,0,0,.16)";
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  [[210, 0.66, -0.08, 0.16, 12], [150, 0.86, 0.55, 0.13, -8], [110, 0.03, 0.72, 0.12, 24]]
+    .forEach(([size, px, py, opacity, rot]) => {
+      ctx.save();
+      ctx.translate(CARD_W * px, CARD_H * py);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+      ctx.lineWidth = 3;
+      roundRect(ctx, -size / 2, -size / 2, size, size, 4);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+  drawText(ctx, "A C C O U N T I N G   P R O F I L E", CARD_PAD, 66, {
+    font: mono(14), color: "rgba(255,255,255,.72)",
+  });
+  drawText(ctx, "会計人16タイプ", CARD_W - CARD_PAD, 66, {
+    font: gothic(16, 600), color: "rgba(255,255,255,.72)", align: "right",
+  });
+
+  // 動物。画像が未用意のアーキタイプでは枠を描かず、文字を全幅で組む
+  // （空の額縁を置くと、絵の読み込みに失敗したように見えるため）。
+  if (character) {
+    ctx.save();
+    roundRect(ctx, CARD_PAD, 112, CARD_ART, CARD_ART, 4);
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.clip();
+    ctx.drawImage(character, CARD_PAD, 112, CARD_ART, CARD_ART);
+    ctx.restore();
+  }
+
+  // 本文カラム
+  const colX = character ? CARD_COL : CARD_PAD;
+  const colW = CARD_W - CARD_PAD - colX;
+  if (mod) {
+    drawText(ctx, mod, colX, 196, { font: mincho(30, 400), color: "rgba(255,255,255,.92)" });
+  }
+  drawText(ctx, tp.name, colX, mod ? 274 : 252, {
+    font: fitFont(ctx, tp.name, colW, 66, (px) => mincho(px), 40), color: "#ffffff",
+  });
+  if (animal) {
+    drawText(ctx, animal, colX, mod ? 314 : 292, {
+      font: gothic(20, 600), color: "rgba(255,255,255,.85)",
+    });
+  }
+  // キャッチコピーは 1 行に収まるまで詰める。折り返すと「。」だけが次行に落ちる
+  const copy = `「${tp.copy}」`;
+  drawText(ctx, copy, colX, mod ? 374 : 352, {
+    font: fitFont(ctx, copy, colW, 27, (px) => mincho(px, 400), 20),
+    color: "rgba(255,255,255,.95)",
+  });
+
+  // 4 軸 — 横 4 列。数値は出さない
+  ctx.strokeStyle = "rgba(255,255,255,.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(CARD_PAD, 508);
+  ctx.lineTo(CARD_W - CARD_PAD, 508);
+  ctx.stroke();
+
+  const cells = result.axes.length;
+  const gutter = 30;
+  const cellW = (CARD_W - CARD_PAD * 2 - gutter * (cells - 1)) / cells;
+  result.axes.forEach((a, i) => {
+    const x = CARD_PAD + i * (cellW + gutter);
+    const winLeft = a.letter === a.ax.L;
+    // 軸のあいだに仕切りを入れる。入れないと隣り合う極名（俯瞰 と 検証）が
+    // ひと組の対に見えて、どのバーの見出しか分からなくなる。
+    if (i > 0) {
+      ctx.strokeStyle = "rgba(255,255,255,.22)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x - gutter / 2, 544);
+      ctx.lineTo(x - gutter / 2, 600);
+      ctx.stroke();
+    }
+    drawText(ctx, a.ax.lName, x, 566, {
+      font: gothic(18, winLeft ? 700 : 400),
+      color: winLeft ? "#ffffff" : "rgba(255,255,255,.55)",
+    });
+    drawText(ctx, a.ax.rName, x + cellW, 566, {
+      font: gothic(18, !winLeft ? 700 : 400),
+      color: !winLeft ? "#ffffff" : "rgba(255,255,255,.55)",
+      align: "right",
+    });
+    drawCardAxisBar(ctx, x, 582, cellW, 12, a.pct ?? 50, winLeft);
+  });
+
+  drawText(ctx, "#会計人プロフィール", CARD_PAD, 644, {
+    font: gothic(16, 600), color: "rgba(255,255,255,.8)",
+  });
+  drawText(ctx, D.siteRoot().replace(/^https?:\/\//, "").replace(/\/$/, ""), CARD_W - CARD_PAD, 644, {
+    font: mono(13), color: "rgba(255,255,255,.62)", align: "right",
+  });
+
+  return canvas;
+}
+
+/**
+ * 共有カードを File にする。Web Share API に渡せなければ null。
+ * 写真主体のカードなので JPEG にする（PNG だと 3.5MB 程度になり、
+ * スマホの共有シートに渡すには重い）。
+ */
+export async function buildShareFile(result, code) {
+  if (typeof File !== "function" || !navigator.canShare) return null;
+  const canvas = await renderShareCard(result, code);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) return null;
+  const file = new File([blob], `accounting-profile-${code}.jpg`, { type: "image/jpeg" });
+  return navigator.canShare({ files: [file] }) ? file : null;
+}
+
 // ---------------------------------------------------------------- 書き出し
 
 function formatDate(d) {

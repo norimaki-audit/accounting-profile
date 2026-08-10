@@ -5,7 +5,7 @@ import {
   missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
-import { downloadSheet } from "../export.js";
+import { buildShareFile, downloadSheet } from "../export.js";
 
 const anim = (name, delay) =>
   prefersReducedMotion() ? null : `animation:${name} var(--ap-anim-${name}) ${delay}ms both`;
@@ -46,6 +46,8 @@ export function renderResult() {
   });
 
   const missing = missingLayers(personal);
+  // 共有ボタンが押される前に画像を用意しておく（navigator.share は待てないため）
+  if (!state.preview && res) prepareShareFile(res, code);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code, archetypeModifier(personal)),
@@ -170,25 +172,57 @@ function shareUrl(res, code) {
 }
 
 /**
- * 共有本文はスマホのタイムラインで折りたたまれない長さに収める。
- * 全レイヤーを並べると 9 行を超えて画面の半分を占めてしまうため、
- * アーキタイプ名・動物・キャッチコピーだけに絞る（本文3行 + タグ + URL）。
- * 残りのレイヤーはリンク先の結果画面で見てもらう。
+ * 共有カードの File。結果を描いた時点で先に作っておく。
+ *
+ * navigator.share() はユーザー操作の直後にしか呼べない。クリックしてから
+ * 画像を生成して await すると、その間に操作の権利が切れて弾かれることがあるので、
+ * 押されたときには同期的に渡せる状態にしておく。
  */
-function shareToX(res, code, tp) {
-  const animal = D.animals[code];
-  const text = [
-    "ACCOUNTING PROFILE",
-    animal ? `${tp.name}（${animal}）` : tp.name,
-    `「${tp.copy}」`,
-    "#会計人プロフィール",
-  ].join("\n");
+let shareFile = null;
+let shareFileKey = null;
 
+/** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
+const shareKey = (result, code) =>
+  [code, archetypeModifier(result) || "", result.axes.map((a) => a.pct).join(".")].join("|");
+
+function prepareShareFile(result, code) {
+  const key = shareKey(result, code);
+  if (shareFileKey === key) return;
+  shareFile = null;
+  shareFileKey = key;
+  buildShareFile(result, code)
+    .then((file) => { if (shareFileKey === key) shareFile = file; })
+    .catch(() => { /* 画像を作れない環境ではテキスト共有にフォールバックする */ });
+}
+
+const shareText = (tp) => `会計人16タイプ、私は「${tp.name}」でした\n#会計人プロフィール`;
+
+function openIntent(res, code, tp) {
   window.open(
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl(res, code))}`,
+    `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText(tp))}` +
+      `&url=${encodeURIComponent(shareUrl(res, code))}`,
     "_blank",
     "noopener"
   );
+}
+
+/**
+ * 画像1枚を主役にして共有する。
+ * 画像を添付できない環境（デスクトップのブラウザなど）では、これまでどおり
+ * テキスト + URL で開く。その場合もリンクカードにアーキタイプの動物が出る。
+ */
+function shareToX(res, code, tp) {
+  if (shareFile && navigator.canShare?.({ files: [shareFile] })) {
+    navigator
+      .share({ files: [shareFile], text: shareText(tp), url: shareUrl(res, code) })
+      .catch((err) => {
+        // ユーザーが共有シートを閉じただけのときは、勝手に別の共有を始めない
+        if (err && err.name === "AbortError") return;
+        openIntent(res, code, tp);
+      });
+    return;
+  }
+  openIntent(res, code, tp);
 }
 
 function retake() {

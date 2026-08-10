@@ -262,30 +262,51 @@ const canUseOsShare = () =>
   navigator.maxTouchPoints > 0 &&
   window.matchMedia("(pointer: coarse)").matches;
 
+// Instagram の投稿画面。デスクトップのブラウザからも画像を投稿できるので、
+// 保存したあとの行き先として案内できる。スマホではアプリがあれば
+// ユニバーサルリンクでアプリが開く（instagram:// は未インストール時に行き止まりになる）。
+const INSTAGRAM_URL = "https://www.instagram.com/";
+
 /**
  * Instagram へ。
  *
- * Instagram はリンクカードを持たず、キャプションのリンクも押せないので、
- * 渡せるのは画像だけ。スマホでは OS の共有シートに Instagram が出るのでそこへ
- * 正方形カードを渡す。デスクトップには共有先が無いので、画像を保存して
- * 手で投稿してもらう。
+ * Instagram はリンクカードを持たず、キャプションのリンクも押せないので、渡せるのは
+ * 画像だけ。しかも Web から画像を直接渡す手段は OS の共有シートしかない
+ * （X の intent にあたる URL が無く、instagram:// はカメラロールのパスを、
+ * Graph API はプロアカウントと審査を要求する）。
  *
- * 画像ができるまでボタンは押せないので、スマホでここに来たときは必ず共有シートが出る。
+ * そこで
+ *   スマホ … 共有シートへ正方形カードを渡す（シートに Instagram が出る）
+ *   それ以外 … 画像を保存し、そのまま Instagram を開くリンクを添える
+ * の2本立てにする。画像ができるまでボタンは押せないので、スマホでここに来たときは
+ * 必ず共有シートが出る。
  */
 function shareToInstagram(result, code, statusEl, button) {
   const file = squareFile;
   if (file && canUseOsShare() && navigator.canShare({ files: [file] })) {
     navigator.share({ files: [file] }).catch((err) => {
       if (err && err.name === "AbortError") return;
-      runDownload(button, statusEl, "画像を保存しました。Instagram から投稿してください。", () =>
-        downloadSquareCard(result, code)
-      );
+      saveForInstagram(result, code, statusEl, button);
     });
     return;
   }
-  runDownload(button, statusEl, "正方形カードを保存しました。Instagram から投稿してください。", () =>
-    downloadSquareCard(result, code)
+  saveForInstagram(result, code, statusEl, button);
+}
+
+/** 正方形カードを保存し、そのあと Instagram へ行けるようにする。 */
+async function saveForInstagram(result, code, statusEl, button) {
+  const saved = await runDownload(
+    button, statusEl, "画像を保存しました。Instagram を開いて、この画像を投稿してください。",
+    () => downloadSquareCard(result, code)
   );
+  // 保存できたときだけ行き先を出す。失敗しているのに次を案内しても仕方がない
+  if (!saved) return;
+  statusEl.append(" ", h("a.ap-share-open", {
+    href: INSTAGRAM_URL,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    text: "Instagramを開く",
+  }));
 }
 
 function retake() {
@@ -327,15 +348,18 @@ async function runDownload(button, status, successText, task) {
   button.disabled = true;
   button.textContent = "作成中…";
   status.hidden = true;
+  status.textContent = "";   // 前回の「Instagramを開く」リンクを残さない
   status.classList.remove("ap-download-status--error");
   try {
     await task();
     status.textContent = successText;
     status.hidden = false;
+    return true;
   } catch (err) {
     status.textContent = `保存できませんでした: ${err instanceof Error ? err.message : String(err)}`;
     status.classList.add("ap-download-status--error");
     status.hidden = false;
+    return false;
   } finally {
     button.disabled = false;
     button.textContent = label;

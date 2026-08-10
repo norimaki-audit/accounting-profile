@@ -307,6 +307,9 @@ group("共有ボタン");
   // 画像ができる前に押すと黙って保存に落ちていたので、できるまで押せなくする
   ok("画像ができるまでInstagramボタンを押せなくする",
     /igBtn\.disabled = true;/.test(src) && /prepareSquareFile\([^)]*\)\.then/.test(src));
+  // 保存しただけで終わらせず、Instagram へ行ける（Web版は PC からも投稿できる）
+  ok("保存のあとに Instagram を開く導線を出す",
+    /INSTAGRAM_URL = "https:\/\/www\.instagram\.com\/"/.test(src) && /Instagramを開く/.test(src));
 }
 
 group("アーキタイプの出やすさ");

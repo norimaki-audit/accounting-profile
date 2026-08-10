@@ -243,11 +243,17 @@ group("共有ボタン");
   // X は「リンクとして開く」だけにする。クリックを横取りして navigator.share() を
   // 呼ぶと、X ではなく OS の共有シートが開いてしまい、押しても X に飛べなくなる。
   const src = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
-  const xLink = src.slice(src.indexOf("ap-share-link"), src.indexOf("ap-share-ig"));
+  const xLink = src.slice(src.indexOf("ap-share-link"), src.indexOf("igBtn,"));
   ok("Xボタンはクリックを横取りしない", !/onClick/.test(xLink));
   ok("Xボタンは新しいタブへのリンク", /href:\s*intentUrl\(/.test(xLink) && /target:\s*"_blank"/.test(xLink));
   // 共有シートを使うのは Instagram だけ（画像しか渡せない先なので添付が要る）
   eq("navigator.share を呼ぶのは1箇所だけ", (src.match(/navigator\.share\(\{/g) || []).length, 1);
+
+  // Instagram は共有シートが出る。X と同じ「〜でシェア」だと直行すると読めてしまう
+  ok("Instagramボタンは直行すると読める文言にしない", !/Instagramでシェア/.test(src));
+  // 画像ができる前に押すと黙って保存に落ちていたので、できるまで押せなくする
+  ok("画像ができるまでInstagramボタンを押せなくする",
+    /igBtn\.disabled = true;/.test(src) && /prepareSquareFile\([^)]*\)\.then/.test(src));
 }
 
 group("アーキタイプの出やすさ");

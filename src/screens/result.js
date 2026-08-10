@@ -46,8 +46,6 @@ export function renderResult() {
   });
 
   const missing = missingLayers(personal, state.ops);
-  // 共有ボタンが押される前に画像を用意しておく（navigator.share は待てないため）
-  if (!state.preview && res) prepareSquareFile(res, code);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code, archetypeModifier(personal)),
@@ -117,6 +115,29 @@ function renderHeader(tp, res, code, mod) {
 
   const shareStatus = h("p.nm-supporting-text.ap-download-status.ap-share-status", { hidden: true });
 
+  // Instagram は X と並ぶ共有先として独立させる。渡せるのは画像だけなので、
+  // スマホは共有シート経由、デスクトップは保存して手で投稿してもらう。
+  //
+  // 文言は挙動に合わせる。押しても Instagram に直行はしない（Instagram には
+  // X の intent にあたる URL が無く、Web から画像を渡す道は共有シートしかない）。
+  // 隣の「Xでシェア」と同じ形にすると直行すると読めるため、実際に何が起きるかを
+  // 書いた「画像を共有」にしている。
+  // 図鑑プレビューには渡す結果が無いので、共有シートには回さず保存だけにする
+  const willShare = canUseOsShare() && !state.preview && !!res;
+  const igBtn = btn("button.nm-btn.nm-btn--secondary.nm-btn--lg.ap-share-ig", {
+    text: willShare ? "画像を準備中…" : "Instagram用に保存",
+    onClick: (e) => shareToInstagram(res, code, shareStatus, e.currentTarget),
+  });
+  // 画像ができるまで押せなくする。押すタイミングによって共有シートが出たり
+  // 黙って保存になったりしていたので、押せる＝必ず共有シートが出る状態にする。
+  if (willShare) {
+    igBtn.disabled = true;
+    prepareSquareFile(res, code).then((file) => {
+      igBtn.disabled = false;
+      igBtn.textContent = file ? "Instagram用の画像を共有" : "Instagram用に保存";
+    });
+  }
+
   const copyBtn = btn("button.nm-btn.nm-btn--secondary.nm-btn--lg", {
     text: "結果リンクをコピー",
     onClick: (e) => {
@@ -156,12 +177,7 @@ function renderHeader(tp, res, code, mod) {
         rel: "noopener noreferrer",
         text: "Xでシェア",
       }),
-      // Instagram は X と並ぶ共有先として独立させる。渡せるのは画像だけなので、
-      // スマホは共有シート経由、デスクトップは保存して手で投稿してもらう。
-      btn("button.nm-btn.nm-btn--secondary.nm-btn--lg.ap-share-ig", {
-        text: canUseOsShare() ? "Instagramでシェア" : "Instagram用に保存",
-        onClick: (e) => shareToInstagram(res, code, shareStatus, e.currentTarget),
-      }),
+      igBtn,
       copyBtn,
       btn("button.nm-btn.nm-btn--tertiary", {
         text: state.preview || shared ? "自分のプロフィールを作る" : "もう一度作る",
@@ -197,32 +213,31 @@ function shareUrl(res, code) {
  * 押されたときには同期的に渡せる状態にしておく。
  */
 let squareFile = null;
-let squareFileKey = null;    // squareFile が指す内容の指紋（成功したときだけ記録する）
-let squarePendingKey = null; // 生成中の指紋
+let squareKey = null;      // いま作っている／作り終えた内容の指紋
+let squarePromise = null;  // その生成の Promise（ボタンの有効化に使う）
 
 /** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
 const shareKey = (result, code) =>
   [code, archetypeModifier(result) || "", result.axes.map((a) => a.pct).join(".")].join("|");
 
+/** 正方形カードを作る。同じ内容なら作り直さず、同じ Promise を返す。 */
 function prepareSquareFile(result, code) {
   // OS の共有シートを使わない端末では File を作らない（保存で足りる）
-  if (!canUseOsShare()) return;
+  if (!canUseOsShare()) return Promise.resolve(null);
   const key = shareKey(result, code);
-  // 失敗した回でキーを覚えてしまうと二度と作り直せなくなるので、成功時だけ記録する
-  if (squareFileKey === key || squarePendingKey === key) return;
+  if (squareKey === key && squarePromise) return squarePromise;
+  squareKey = key;
   squareFile = null;
-  squareFileKey = null;
-  squarePendingKey = key;
-  buildSquareShareFile(result, code)
+  squarePromise = buildSquareShareFile(result, code)
+    .catch(() => null)
     .then((file) => {
-      if (squarePendingKey !== key) return;
-      squarePendingKey = null;
-      if (file) { squareFile = file; squareFileKey = key; }
-    })
-    .catch(() => {
-      // 作れない環境では保存に落とす（次の描画で再挑戦できる）
-      if (squarePendingKey === key) squarePendingKey = null;
+      if (squareKey !== key) return null;   // 別の結果に切り替わっていた
+      squareFile = file;
+      // 作れなかったときはキーを残さない（次の描画で作り直せるように）
+      if (!file) { squareKey = null; squarePromise = null; }
+      return file;
     });
+  return squarePromise;
 }
 
 const shareText = (tp) => `会計人16タイプ、私は「${tp.name}」でした\n#会計人プロフィール`;
@@ -254,6 +269,8 @@ const canUseOsShare = () =>
  * 渡せるのは画像だけ。スマホでは OS の共有シートに Instagram が出るのでそこへ
  * 正方形カードを渡す。デスクトップには共有先が無いので、画像を保存して
  * 手で投稿してもらう。
+ *
+ * 画像ができるまでボタンは押せないので、スマホでここに来たときは必ず共有シートが出る。
  */
 function shareToInstagram(result, code, statusEl, button) {
   const file = squareFile;

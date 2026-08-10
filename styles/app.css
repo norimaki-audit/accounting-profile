@@ -1332,7 +1332,18 @@ h2,
   gap: var(--space-3);
 }
 
+/*
+ * 縦積みの flex にして、余った高さを下に落とす。
+ *
+ * button は中身を上下中央に置くため、グリッドで行の高さに引き伸ばされると
+ * 余りが上下に半分ずつ配られ、画像の上に白帯が出ていた（タイトルが1行の
+ * カードが2行のカードと同じ行に並んだときだけ起きる）。
+ */
 .ap-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   overflow: hidden;
   cursor: pointer;
   padding: 0;

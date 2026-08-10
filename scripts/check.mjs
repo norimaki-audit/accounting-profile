@@ -357,6 +357,14 @@ group("共有ボタン");
   // 保存しただけで終わらせず、Instagram へ行ける（Web版は PC からも投稿できる）
   ok("保存のあとに Instagram を開く導線を出す",
     /INSTAGRAM_URL = "https:\/\/www\.instagram\.com\/"/.test(src) && /Instagramを開く/.test(src));
+  // web の URL ではアプリは開かない（ルート URL はユニバーサルリンクではない）
+  ok("アプリはカスタムスキームで開く", /INSTAGRAM_APP = "instagram:\/\/app"/.test(src));
+  ok("href は web のまま（アプリ未導入でリンクが壊れないように）",
+    src.includes("href: INSTAGRAM_URL,") && !src.includes("href: INSTAGRAM_APP"));
+  // 共有シートの有無ではなく、アプリが在りうる端末かで判定する
+  // （X のアプリ内ブラウザは canShare を持たないことがあるが、アプリは入っている）
+  ok("アプリを試す判定は canShare ではなく端末",
+    /function openInstagram[\s\S]*?if \(!isTouchDevice\(\)\) return;/.test(src));
 }
 
 group("アーキタイプの出やすさ");

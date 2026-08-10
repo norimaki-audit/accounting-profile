@@ -257,15 +257,43 @@ function intentUrl(res, code, tp) {
  * Windows の共有シートで、そこに X はいない（近距離共有・Dropbox・メール等が並ぶ）。
  * 「Xで結果をシェア」を押した人が X へ行けないので、指で触る端末に限る。
  */
-const canUseOsShare = () =>
-  typeof navigator.canShare === "function" &&
-  navigator.maxTouchPoints > 0 &&
-  window.matchMedia("(pointer: coarse)").matches;
+const isTouchDevice = () =>
+  navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches;
 
-// Instagram の投稿画面。デスクトップのブラウザからも画像を投稿できるので、
-// 保存したあとの行き先として案内できる。スマホではアプリがあれば
-// ユニバーサルリンクでアプリが開く（instagram:// は未インストール時に行き止まりになる）。
+const canUseOsShare = () =>
+  typeof navigator.canShare === "function" && isTouchDevice();
+
+// Instagram の投稿画面。デスクトップのブラウザからも画像を投稿できる。
 const INSTAGRAM_URL = "https://www.instagram.com/";
+
+// アプリを開く唯一の手段。https://www.instagram.com/ ではアプリは開かない。
+// Instagram はルート URL をユニバーサルリンクに登録していないので、Safari で web が開く。
+const INSTAGRAM_APP = "instagram://app";
+
+/**
+ * Instagram を開く。指で触る端末ではアプリを試し、開かなければ web に落とす。
+ *
+ * カスタムスキームはアプリが入っていないと何も起きない（iOS では「ページを開けません」が
+ * 出ることがある）。そこで、遷移してもページが見えたままなら web へ切り替える。
+ * アプリへ移ったときはページが隠れるので、その場合は何もしない。
+ */
+function openInstagram(event) {
+  // 判定は「共有シートが使えるか」ではなく「アプリが在りうる端末か」。
+  // X のアプリ内ブラウザは navigator.canShare を持たないことがあるが、
+  // Instagram アプリ自体は入っている。
+  if (!isTouchDevice()) return;   // デスクトップはリンクのまま web を開く
+  event.preventDefault();
+  let left = false;
+  const markLeft = () => { left = true; };
+  document.addEventListener("visibilitychange", markLeft, { once: true });
+  window.addEventListener("pagehide", markLeft, { once: true });
+  window.location.href = INSTAGRAM_APP;
+  setTimeout(() => {
+    document.removeEventListener("visibilitychange", markLeft);
+    window.removeEventListener("pagehide", markLeft);
+    if (!left && !document.hidden) window.location.href = INSTAGRAM_URL;
+  }, 1200);
+}
 
 /**
  * Instagram へ。
@@ -301,11 +329,15 @@ async function saveForInstagram(result, code, statusEl, button) {
   );
   // 保存できたときだけ行き先を出す。失敗しているのに次を案内しても仕方がない
   if (!saved) return;
+  // href は web のまま置く。スキームを href に入れると、アプリが無い端末では
+  // リンクそのものが壊れる（長押しのメニューも無効なアドレスになる）。
+  // アプリを試すのは onClick の仕事にする。
   statusEl.append(" ", h("a.ap-share-open", {
     href: INSTAGRAM_URL,
     target: "_blank",
     rel: "noopener noreferrer",
     text: "Instagramを開く",
+    onClick: openInstagram,
   }));
 }
 

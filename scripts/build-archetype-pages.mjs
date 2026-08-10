@@ -60,6 +60,9 @@ function page(code, hasImage) {
     <meta name="color-scheme" content="light">
     <link rel="canonical" href="${url}">
 
+    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png">
+
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="会計人プロフィール">
     <meta property="og:url" content="${url}">

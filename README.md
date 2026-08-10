@@ -222,7 +222,11 @@ magick SOURCE.png -resize 320x320^ -gravity center -extent 320x320 -strip -sampl
 │  └─ screens/              home / quiz / result / types
 ├─ styles/app.css           Product UI Layer（トークン上書きを含む）
 ├─ t/{CODE}/index.html      アーキタイプ別ページ（16枚・生成物。共有リンクの着地先）
-├─ assets/archetypes/       アーキタイプのキャラクター画像（720px / thumb 320px）
+├─ assets/
+│  ├─ archetypes/           アーキタイプのキャラクター画像（720px / thumb 320px）
+│  ├─ og.jpg                トップの SNS カード画像（1200×630）
+│  ├─ favicon.svg           ブランドマーク
+│  └─ apple-touch-icon.png  同上（180×180）
 ├─ design-system/           norimaki-tool-standards の design/ を複製
 └─ scripts/
    ├─ dev-server.mjs             ローカル確認用の静的サーバー
@@ -247,6 +251,17 @@ node scripts/build-archetype-pages.mjs
 - **`src/data.js` のアーキタイプや画像を変えたら再実行してコミットしてください**
 
 `SITE`（公開URL）は生成スクリプト冒頭の定数です。独自ドメインに移す場合はそこだけ変えます。
+
+### トップのカード（`assets/og.jpg`）
+
+トップは「どのアーキタイプが自分か」を見せたい入口なので、結果ページの正方形カードとは別に
+**キャラクターを8体並べた横長カード**（1200×630 / `twitter:card` は `summary_large_image`）を
+持たせています。中身は見出し・リード・`16 ARCHETYPES` と、下端のキャラクター帯です。
+
+この1枚は生成物ではなく**手で作った静的アセット**です。依存パッケージを持たない方針のため
+画像合成ライブラリを入れておらず、ビルドスクリプトはありません。キャラクターを差し替えたり
+見出しを変えたときは、作り直してコミットしてください（帯に使っているのは
+`PVSD / BXAC / BXSD / PVAC / BXAD / BVSC / BVAC / PXSD` の8体）。
 
 `design-system/` は [norimaki-audit/norimaki-tool-standards](https://github.com/norimaki-audit/norimaki-tool-standards) の `design/` をそのまま持ち込んだBrand Layerです。アプリ固有の紙色地・深緑・角丸2pxへの上書きは `styles/app.css` の `:root` に集約しており、design-system 側のファイルは変更していません（更新時は上書きコピーで追従できます）。
 

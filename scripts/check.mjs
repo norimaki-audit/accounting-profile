@@ -85,11 +85,13 @@ for (const code of D.typeOrder) {
 // ---------------------------------------------------------------- 出題フロー
 
 group("出題ページ");
-eq("全体で18ページ", S.pageCount(), 18);
-eq("コアは4ページ", S.corePageCount(), 4);
+eq("全体で19ページ（同点の二択を含む）", S.pageCount(), 19);
+eq("コアは5ページ（二択は同点のときだけ出す）", S.corePageCount(), 5);
+eq("同点が無ければコアは4ページ", S.activePages({}, {}).filter((p) => p.core).length, 4);
 eq("コアは16問（Work Style のみ）", S.coreCount(), 16);
 eq("全回答数は56", S.totalCount(), 56);
-ok("コアは Work Style だけ", S.pages().filter((p) => p.core).every((p) => p.sec === "B"));
+ok("コアは Work Style と同点の二択だけ",
+  S.pages().filter((p) => p.core).every((p) => p.sec === "B" || p.kind === "tie"));
 eq("設問番号は Work Style が Q01 から",
   S.likertDisplayNo(S.pages()[0].indices[0]), 1);
 eq("設問番号の最大は49", Math.max(...S.likertItems().map((_, i) => S.likertDisplayNo(i))), 49);
@@ -104,10 +106,11 @@ group("受験していない人");
   eq("任意パートは37回答", S.optionalCount(noExam), 37);
   eq("出題される総数は53", S.plannedCount(noExam), 53);
   eq("受験ありは56", S.plannedCount(withExam), 56);
+  const s0 = S.pages().findIndex((p) => p.op?.id === "S0");
   ok("S0 のあとは Practice へ飛ぶ",
-    S.pages()[S.nextPageIndex(11, noExam)].op?.id === "P1");
-  ok("S0 がレイヤーの終端になる", S.isLayerEnd(11, noExam) === true);
-  ok("受験ありなら S0 は終端でない", S.isLayerEnd(11, withExam) === false);
+    S.pages()[S.nextPageIndex(s0, noExam)].op?.id === "P1");
+  ok("S0 がレイヤーの終端になる", S.isLayerEnd(s0, noExam) === true);
+  ok("受験ありなら S0 は終端でない", S.isLayerEnd(s0, withExam) === false);
 
   // 全部答えたら「つづきから再開」を出さない（実際の総数と比べる）
   const ans = {};
@@ -230,6 +233,56 @@ ok("日々の作業が先頭に並ぶ",
   D.profile.practiceDomains.slice(0, 6).includes("記帳・仕訳"));
 ok("サービス名ではなく作業名（記帳代行を含まない）",
   !D.profile.practiceDomains.includes("記帳代行"));
+
+group("同点の軸");
+{
+  const items = S.likertItems();
+  const tie = {};
+  items.forEach((q, i) => { if (q.sec === "B") tie[i] = 1; });   // 全部「やや当てはまる」
+
+  eq("全部同じ答えだと4軸とも同点", S.tiedAxes(tie).length, 4);
+  ok("答え終わっていない軸は同点と呼ばない", S.tiedAxes({}).length === 0);
+  eq("二択の設問は4軸ぶん", D.styleTie.length, 4);
+  ok("二択は軸ごとに1問ずつ",
+    D.styleAxes.every((_, ai) => D.styleTie.filter((t) => t.ax === ai).length === 1));
+  ok("二択に「どちらでもない」を置かない",
+    D.styleTie.every((t) => t.l && t.r && !("m" in t)));
+
+  // 同点があるときだけ二択ページを出す
+  const tiePage = S.pages().find((p) => p.kind === "tie");
+  ok("同点が無ければ二択ページは出ない", S.pageApplies(tiePage, {}, {}) === false);
+  ok("同点があれば二択ページを出す", S.pageApplies(tiePage, {}, tie) === true);
+  ok("二択ページは Work Style の直後", S.pages()[4] === tiePage);
+  ok("二択に答えるまで先へ進めない", S.isPageDone(tiePage, tie, {}) === false);
+  ok("Work Style の最終ページは終端にならない（二択が続く）",
+    S.isLayerEnd(3, {}, tie) === false && S.isLayerEnd(3, {}, {}) === true);
+
+  // 本人が選んだ極になり、同点のまま断定しない
+  const picked = { ...tie, t0: "L", t1: "R", t2: "L", t3: "R" };
+  const r = S.computeResult(picked, {});
+  eq("二択の答えで極が決まる", r.code, "PXSC");
+  ok("二択で決まった軸は 50 のままにしない", r.axes.every((a) => a.pct === 56));
+  ok("二択で決まった軸は answer 扱い", r.axes.every((a) => a.resolved === "answer"));
+  eq("二択ページが埋まる", S.isPageDone(tiePage, picked, {}), true);
+
+  const flipped = S.computeResult({ ...tie, t0: "R", t1: "L", t2: "R", t3: "L" }, {});
+  eq("逆を選べば逆の極になる", flipped.code, "BVAD");
+
+  // 二択に答えていない同点は、そこから出る行動を断定しない
+  const raw = S.computeResult(tie, {});
+  ok("未回答の同点は fallback 扱い", raw.axes.every((a) => a.resolved === "fallback"));
+  const rawLines = S.habitLines(raw, raw.code).map((l) => l.k);
+  ok("fallback の軸からは行動を断定しない",
+    !rawLines.includes("調べ物は") && !rawLines.includes("締切前は") && !rawLines.includes("意見が割れたら"));
+  const okLines = S.habitLines(r, r.code).map((l) => l.k);
+  ok("答えで決まった軸からは行動を出す",
+    okLines.includes("調べ物は") && okLines.includes("締切前は") && okLines.includes("意見が割れたら"));
+
+  // 進捗・再開の数え方
+  eq("同点があるとコアの出題数が増える", S.coreTotal(tie), 20);
+  eq("同点が無ければコアは16問のまま", S.coreTotal({}), 16);
+  eq("二択は「出題される総数」に数えない", S.answeredCount(picked, {}), 16);
+}
 
 group("共有リンク");
 {

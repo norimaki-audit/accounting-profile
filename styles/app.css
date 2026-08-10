@@ -370,11 +370,11 @@ h2,
 
 /* Likert */
 
+/* 丸のマスを隙間なく並べる。マス同士の間に「押しても何も起きない帯」を作らない */
 .ap-likert {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 0;
 }
 
 .ap-likert-label {
@@ -383,14 +383,29 @@ h2,
   flex: none;
 }
 
-.ap-likert-label--pos { color: var(--brand-700); }
-.ap-likert-label--neg { color: var(--text-muted); text-align: right; }
+.ap-likert-label--pos { color: var(--brand-700); margin-right: 6px; }
+.ap-likert-label--neg { color: var(--text-muted); text-align: right; margin-left: 6px; }
 
+/*
+ * ボタンは行を等分する透明なマス（高さ 44px 以上）。丸は中の span で描く。
+ * 以前はボタン自体が丸で、実際に押せる範囲が 26〜34px しかなかった。
+ */
 .ap-likert-dot {
-  flex: none;
-  border-radius: 50%;
-  cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
   padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.ap-likert-mark {
+  width: var(--ap-dot);
+  height: var(--ap-dot);
+  border-radius: 50%;
   display: grid;
   place-items: center;
   font-size: 14px;
@@ -402,18 +417,17 @@ h2,
   transition: background 0.15s, transform 0.15s;
 }
 
-.ap-likert-dot--pos { border-color: var(--brand-500); }
-.ap-likert-dot--mid { border-color: var(--gray-400); }
-.ap-likert-dot--neg { border-color: var(--gray-500); }
+.ap-likert-dot--pos .ap-likert-mark { border-color: var(--brand-500); }
+.ap-likert-dot--mid .ap-likert-mark { border-color: var(--gray-400); }
+.ap-likert-dot--neg .ap-likert-mark { border-color: var(--gray-500); }
 
-.ap-likert-dot.is-selected {
-  transform: scale(1.1);
-}
-.ap-likert-dot--pos.is-selected { background: var(--brand-500); }
-.ap-likert-dot--mid.is-selected { background: var(--gray-400); }
-.ap-likert-dot--neg.is-selected { background: var(--gray-500); }
+.ap-likert-dot.is-selected .ap-likert-mark { transform: scale(1.1); }
+.ap-likert-dot--pos.is-selected .ap-likert-mark { background: var(--brand-500); }
+.ap-likert-dot--mid.is-selected .ap-likert-mark { background: var(--gray-400); }
+.ap-likert-dot--neg.is-selected .ap-likert-mark { background: var(--gray-500); }
 
 .ap-na {
+  position: relative;
   margin-top: 10px;
   font-size: var(--font-size-supporting);
   cursor: pointer;
@@ -424,11 +438,58 @@ h2,
   background: transparent;
 }
 
+/* 見た目の枠は変えずに、押せる範囲だけ 44px まで広げる */
+.ap-na::after {
+  content: "";
+  position: absolute;
+  inset: -7px -6px;
+}
+
 .ap-na.is-selected {
   border-color: var(--brand-500);
   color: var(--brand-800);
   background: var(--brand-50);
 }
+
+/* 同点の二択 */
+
+.ap-tie-options {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ap-tie-option {
+  display: grid;
+  gap: 2px;
+  min-height: 60px;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.ap-tie-pole {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+.ap-tie-label {
+  font-size: var(--font-size-label);
+  line-height: 1.5;
+}
+
+.ap-tie-option.is-selected {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+
+.ap-tie-option.is-selected .ap-tie-pole { color: var(--brand-700); }
+.ap-tie-option.is-selected .ap-tie-label { font-weight: 700; color: var(--brand-800); }
 
 /* DNA チップ */
 
@@ -445,8 +506,8 @@ h2,
 .ap-chip {
   cursor: pointer;
   font-size: var(--font-size-label);
-  padding: 9px 14px;
-  min-height: 40px;
+  padding: 11px 14px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--surface-card);

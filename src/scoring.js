@@ -55,11 +55,50 @@ export function pages() {
     for (let i = 0; i < idx.length; i += perPage) {
       out.push({ kind: "likert", sec, layer: SEC_LAYER[sec], core, indices: idx.slice(i, i + perPage) });
     }
+    // 同点の軸があるときだけ出す二択ページ。Work Style の直後に置き、
+    // アーキタイプが確定してから結果画面へ抜けるようにする。
+    if (sec === "B") out.push({ kind: "tie", layer: SEC_LAYER[sec], core: true });
   });
   D.profile.ops.forEach((op) => out.push({ kind: "op", op, layer: OP_LAYER[op.kind], core: false }));
   pagesCache = out;
   return out;
 }
+
+// ---- 同点の軸（Work Style だけ）----
+
+/** 同点解消の答えを ans に置くときのキー。likert のインデックス（数値）と衝突しない。 */
+export const TIE_KEY = (ai) => `t${ai}`;
+const TIE_KEY_RE = /^t\d+$/;
+
+/**
+ * 引き分けている軸の一覧。
+ * その軸の 4 問がすべて埋まっていて、極方向の合計が 0 の軸だけを返す。
+ * まだ答え終わっていない軸は（合計が 0 でも）引き分けとは呼ばない。
+ */
+export function tiedAxes(ans = {}) {
+  const items = likertItems();
+  const out = [];
+  D.styleAxes.forEach((ax, ai) => {
+    let s = 0, asked = 0, filled = 0;
+    items.forEach((q, i) => {
+      if (q.sec !== "B" || q.ax !== ai) return;
+      asked++;
+      const v = ans[i];
+      if (v == null) return;
+      filled++;
+      if (v !== NA) s += q.p === ax.L ? v : -v;
+    });
+    if (filled === asked && s === 0) out.push(ai);
+  });
+  return out;
+}
+
+/** 引き分けの軸のうち、二択に答え終わった数。 */
+export const answeredTie = (ans = {}) =>
+  tiedAxes(ans).filter((ai) => ans[TIE_KEY(ai)] != null).length;
+
+/** 二択も含めたコアの出題数（引き分けが無ければ 16 のまま）。 */
+export const coreTotal = (ans = {}) => coreCount() + tiedAxes(ans).length;
 
 export const NONE = "とくになし";
 export const NO_EXAM = "受験経験なし";
@@ -76,19 +115,20 @@ export const hasExamExperience = (ops) =>
  * 会計事務所職員・監査アシスタント・経理補助など受験していない人に、
  * 勉強したことのない科目を選ばせないための判定。
  */
-export function pageApplies(page, ops) {
+export function pageApplies(page, ops, ans = {}) {
   if (page.kind === "op" && page.op.kind === "subject") return hasExamExperience(ops);
+  if (page.kind === "tie") return tiedAxes(ans).length > 0;
   return true;
 }
 
 /** 出題対象のページだけを返す。 */
-export const activePages = (ops) => pages().filter((p) => pageApplies(p, ops));
+export const activePages = (ops, ans = {}) => pages().filter((p) => pageApplies(p, ops, ans));
 
 /** i の次に出題するページ番号。出題しないページは飛ばす。-1 なら以降なし。 */
-export function nextPageIndex(i, ops, dir = 1) {
+export function nextPageIndex(i, ops, dir = 1, ans = {}) {
   const all = pages();
   for (let k = i + dir; k >= 0 && k < all.length; k += dir) {
-    if (pageApplies(all[k], ops)) return k;
+    if (pageApplies(all[k], ops, ans)) return k;
   }
   return -1;
 }
@@ -97,8 +137,8 @@ export function nextPageIndex(i, ops, dir = 1) {
  * そのページがレイヤーの最終ページか。
  * ここで結果画面へ戻し、増えたレイヤーをその場で見せる（性格を足したら修飾語が付く、など）。
  */
-export function isLayerEnd(i, ops = {}) {
-  const next = nextPageIndex(i, ops);
+export function isLayerEnd(i, ops = {}, ans = {}) {
+  const next = nextPageIndex(i, ops, 1, ans);
   return next === -1 || pages()[next].layer !== pages()[i].layer;
 }
 
@@ -121,15 +161,16 @@ export const pageCount = () => pages().length;
 /** コアの最終ページの次 = 任意パートの先頭ページ番号 */
 export const corePageCount = () => pages().filter((p) => p.core).length;
 
-/** コア（Work Style）の Likert インデックス */
-export const coreIndices = () => pages().filter((p) => p.core).flatMap((p) => p.indices);
+/** コア（Work Style）の Likert インデックス。二択ページは設問を持たないので除く。 */
+export const coreIndices = () =>
+  pages().filter((p) => p.core && p.kind === "likert").flatMap((p) => p.indices);
 
 export const totalCount = () => likertItems().length + D.profile.ops.length;
 export const coreCount = () => coreIndices().length;
 
 /** 任意パートの回答数。出題しないページ（受験なしの科目3問）は数に入れない。 */
-export const optionalCount = (ops = {}) =>
-  activePages(ops)
+export const optionalCount = (ops = {}, ans = {}) =>
+  activePages(ops, ans)
     .filter((p) => !p.core)
     .reduce((n, p) => n + (p.kind === "op" ? 1 : p.indices.length), 0);
 
@@ -138,7 +179,7 @@ export const optionalCount = (ops = {}) =>
  * totalCount() は常に 56 だが、受験していない人には科目3問を出さないので
  * 上限は 53 になる。「つづきから再開」の判定はこちらで行う。
  */
-export const plannedCount = (ops = {}) => coreCount() + optionalCount(ops);
+export const plannedCount = (ops = {}, ans = {}) => coreCount() + optionalCount(ops, ans);
 
 /**
  * 「つづきから再開」を出すか。
@@ -147,7 +188,7 @@ export const plannedCount = (ops = {}) => coreCount() + optionalCount(ops);
  */
 export function canResume(ans, ops = {}) {
   const saved = answeredCount(ans || {}, ops);
-  return saved > 0 && saved < plannedCount(ops);
+  return saved > 0 && saved < plannedCount(ops, ans || {});
 }
 
 /** コアの回答済み数 */
@@ -157,7 +198,7 @@ export function answeredCore(ans) {
 
 /** 任意パート（Personality + Study + DNA）の回答済み数 */
 export function answeredOptional(ans, ops) {
-  return activePages(ops)
+  return activePages(ops, ans)
     .filter((p) => !p.core)
     .reduce((n, p) => n + (p.kind === "op"
       ? ((ops[p.op.id] || []).length > 0 ? 1 : 0)
@@ -166,7 +207,8 @@ export function answeredOptional(ans, ops) {
 
 /** ページが埋まっているか（Likert は全問回答、DNA は 1 つ以上選択）。 */
 export function isPageDone(page, ans, ops) {
-  if (!pageApplies(page, ops)) return true;   // 出題しないページは埋まっている扱い
+  if (!pageApplies(page, ops, ans)) return true;   // 出題しないページは埋まっている扱い
+  if (page.kind === "tie") return tiedAxes(ans).every((ai) => ans[TIE_KEY(ai)] != null);
   return page.kind === "op"
     ? (ops[page.op.id] || []).length > 0
     : page.indices.every((i) => ans[i] != null);
@@ -240,7 +282,14 @@ function tieBreaksLeft(axisIndex, vals) {
   return ((h >>> 0) & 1) === 0;
 }
 
-/** Work Style: 軸ごと 4 問を極方向に合計 s(−8..+8) → pct = round(50 + 50|s|/8)。s>0 で左極。 */
+/**
+ * Work Style: 軸ごと 4 問を極方向に合計 s(−8..+8) → pct = round(50 + 50|s|/8)。s>0 で左極。
+ *
+ * 引き分け（s=0）は二択（styleTie）の答えで決める。答えがあれば s=±1 として扱うので
+ * pct は 56 になり、極は本人が選んだものになる（resolved:"answer"）。
+ * 二択に答えていない引き分けは根拠が無いので、極だけ内部で決めて resolved:"fallback"
+ * とし、そこから出る行動傾向は断定しない（habitLines を参照）。
+ */
 function scoreWorkStyle(ans, items) {
   return D.styleAxes.map((ax, ai) => {
     let s = 0;
@@ -251,9 +300,21 @@ function scoreWorkStyle(ans, items) {
       vals.push(isMissing(v) ? 9 : v);   // 未回答も並びの一部として扱う
       if (!isMissing(v)) s += q.p === ax.L ? v : -v;
     });
+
+    let left, resolved = null;
+    const pick = ans[TIE_KEY(ai)];
+    if (s !== 0) {
+      left = s > 0;
+    } else if (pick === "L" || pick === "R") {
+      left = pick === "L";
+      s = left ? 1 : -1;
+      resolved = "answer";
+    } else {
+      left = tieBreaksLeft(ai, vals);
+      resolved = "fallback";
+    }
     const pct = Math.round(50 + (50 * Math.abs(s)) / 8);
-    const left = s === 0 ? tieBreaksLeft(ai, vals) : s > 0;
-    return { ax, letter: left ? ax.L : ax.R, pct, s };
+    return { ax, letter: left ? ax.L : ax.R, pct, s, resolved };
   });
 }
 
@@ -328,7 +389,7 @@ function scorePractice(ops) {
  */
 function answeredLayers(ans, ops) {
   const out = {};
-  activePages(ops).forEach((p) => {
+  activePages(ops, ans).forEach((p) => {
     if (p.core) return;
     out[p.layer] = (out[p.layer] ?? true) && isPageDone(p, ans, ops);
   });
@@ -490,13 +551,16 @@ export function habitLines(result, code) {
   const tp = D.types[code];
   if (!tp) return [];
   const on = studyOn(result);
+  // 引き分けたまま二択にも答えていない軸は、極が本人の答えから決まっていない。
+  // その軸から出る行動の行は落とす（根拠のないことを断定しないため）。
+  const solid = (ai) => !result.axes || result.axes[ai].resolved !== "fallback";
   const lines = [
     { k: "仕事では", v: `${tp.tsuyomi}が自然に出やすい` },
-    { k: "調べ物は", v: D.habits[code[0]] },
-    { k: "締切前は", v: D.habits[code[2]] },
+    solid(0) ? { k: "調べ物は", v: D.habits[code[0]] } : null,
+    solid(2) ? { k: "締切前は", v: D.habits[code[2]] } : null,
     { k: "チームでは", v: tp.kyodo },
-    { k: "意見が割れたら", v: D.habits[code[1]] },
-  ];
+    solid(1) ? { k: "意見が割れたら", v: D.habits[code[1]] } : null,
+  ].filter(Boolean);
   if (on.length) {
     lines.push({ k: "勉強では", v: `${on.slice(0, 2).join("・")}を取り入れた学習になりやすい` });
   }
@@ -509,7 +573,8 @@ export function habitLines(result, code) {
 
 /** 回答済み数（Likert + DNA 操作） */
 export function answeredCount(ans, ops) {
-  const likert = Object.keys(ans).length;
+  // 同点解消の二択は「出題される総数」に含めないので、ここでも数えない
+  const likert = Object.keys(ans).filter((k) => !TIE_KEY_RE.test(k)).length;
   const opsDone = D.profile.ops.filter((op) => (ops[op.id] || []).length > 0).length;
   return likert + opsDone;
 }

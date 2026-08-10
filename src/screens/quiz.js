@@ -1,9 +1,10 @@
 import { h, btn, clear, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  likertItems, pages, corePageCount, isPageDone, isLayerEnd,
-  activePages, nextPageIndex, coreCount, optionalCount, likertDisplayNo,
+  likertItems, pages, isPageDone, isLayerEnd,
+  activePages, nextPageIndex, optionalCount, likertDisplayNo,
   answeredCore, answeredOptional, subjectPool, computeResult, NA, NONE, EXCLUSIVE_CHOICES,
+  tiedAxes, answeredTie, coreTotal, TIE_KEY,
 } from "../scoring.js";
 import { state, setState, saveDraft } from "../state.js";
 
@@ -71,8 +72,8 @@ export function renderQuiz() {
   return root;
 }
 
-/** いま表示しているページがコア（Personality + Work Style）か */
-const onCore = () => state.page < corePageCount();
+/** いま表示しているページがコア（Work Style + 同点の二択）か */
+const onCore = () => pages()[state.page].core;
 
 function renderPage() {
   const items = likertItems();
@@ -81,18 +82,20 @@ function renderPage() {
   // 進捗はコア／任意で別々に数える。コア中に「16/56」と出すと未完了感が出るため。
   // ページ番号は出題するページだけで数える（受験なしで飛ばす科目3問は含めない）。
   const core = onCore();
-  const active = activePages(state.ops);
+  const active = activePages(state.ops, state.ans);
   els.stageLabel.textContent = core ? "STEP 1 — アーキタイプが出るまで" : "STEP 2 — プロフィールを埋める";
   els.stageLabel.classList.toggle("nm-badge--brand", core);
-  const optional = active.filter((p) => !p.core);
-  const posInOptional = optional.findIndex((p) => p === page) + 1;
-  els.pageLabel.textContent = core
-    ? `PAGE ${state.page + 1} / ${corePageCount()}`
-    : `PAGE ${posInOptional} / ${optional.length}`;
+  // ページ番号は出題するページだけで数える（同点が無ければ二択ページは存在しない）
+  const group = active.filter((p) => !!p.core === core);
+  const pos = group.findIndex((p) => p === page) + 1;
+  els.pageLabel.textContent = `PAGE ${pos} / ${group.length}`;
   els.body.className = `ap-quiz-body ap-quiz-body--${state.page % 2 === 0 ? "a" : "b"}`;
   clear(els.body);
 
-  if (page.kind === "op") {
+  if (page.kind === "tie") {
+    els.hint.textContent = "同じくらいの重みで答えた軸があります。ここだけ、どちらかを選んでください。";
+    tiedAxes(state.ans).forEach((ai) => els.body.append(renderTieCard(ai)));
+  } else if (page.kind === "op") {
     els.hint.textContent = page.op.kind === "practice"
       ? "Practice DNA — 実務領域の興味です。性格スコアには影響しません。"
       : "Subject DNA — 科目の興味です。性格スコアには影響しません。";
@@ -109,17 +112,22 @@ function renderPage() {
 // ---------------------------------------------------------------- Likert
 
 function renderLikertCard(q, idx, page) {
-  const optionButtons = D.choices.map((c, ci) =>
-    btn("button.ap-likert-dot", {
+  // 丸は中の span で描く。ボタン自体は行を等分する透明なマスにして、
+  // 見た目（26〜34px の丸）を変えずに指で押せる高さ・幅を確保する。
+  const optionButtons = D.choices.map((c, ci) => {
+    const dot = h("span.ap-likert-mark");
+    const b = btn("button.ap-likert-dot", {
       title: c.label,
       "aria-label": c.label,
       "aria-pressed": "false",
       "data-value": String(c.v),
-      style: `width:${LIKERT_SIZES[ci]}px;height:${LIKERT_SIZES[ci]}px`,
+      style: `--ap-dot:${LIKERT_SIZES[ci]}px`,
       class: c.v > 0 ? "ap-likert-dot--pos" : c.v < 0 ? "ap-likert-dot--neg" : "ap-likert-dot--mid",
       onClick: () => pickLikert(idx, c.v, page),
-    })
-  );
+    }, dot);
+    b._mark = dot;
+    return b;
+  });
 
   const naButton = q.na
     ? btn("button.ap-na", {
@@ -149,7 +157,7 @@ function renderLikertCard(q, idx, page) {
       const on = selected === Number(b.dataset.value);
       b.setAttribute("aria-pressed", on ? "true" : "false");
       b.classList.toggle("is-selected", on);
-      b.textContent = on ? "✓" : "";
+      b._mark.textContent = on ? "✓" : "";
     });
     if (naButton) {
       const on = selected === NA;
@@ -170,7 +178,7 @@ function pickLikert(idx, value, page) {
   syncNav();
 
   // レイヤーの切れ目では自動で進めない（結果画面へ飛ばしてしまうため）
-  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !isLayerEnd(state.page, state.ops)) {
+  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !isLayerEnd(state.page, state.ops, state.ans)) {
     clearTimeout(advanceTimer);
     advanceTimer = setTimeout(() => goNext(), 350);
   }
@@ -183,6 +191,63 @@ function toggleNa(idx) {
   setState({ ans }, { render: false });
   saveDraft();
   syncCard(idx);
+  syncProgress();
+  syncNav();
+}
+
+// ---------------------------------------------------------------- 同点の二択
+
+/**
+ * 引き分けた軸の二択。
+ *
+ * 5段階では合計が 0 になることがあり、そこを内部で勝手に倒すと根拠のない極から
+ * 行動傾向まで断定してしまう。同点の軸だけ本人に選んでもらう。
+ * 「どちらでもない」は置かない（置くと同点が解けない）。
+ */
+function renderTieCard(ai) {
+  const ax = D.styleAxes[ai];
+  const q = D.styleTie.find((t) => t.ax === ai);
+  const key = TIE_KEY(ai);
+
+  const options = [
+    { side: "L", label: q.l, pole: ax.lName },
+    { side: "R", label: q.r, pole: ax.rName },
+  ].map((o) =>
+    btn("button.ap-tie-option", {
+      "aria-pressed": "false",
+      "data-side": o.side,
+      onClick: () => pickTie(key, o.side),
+    },
+      h("span.nm-mono.ap-tie-pole", { text: o.pole }),
+      h("span.ap-tie-label", { text: o.label })
+    )
+  );
+
+  const card = h("div.nm-surface.ap-q.ap-tie", {},
+    h("div.ap-q-meta", {},
+      h("span.nm-mono.ap-q-num", { text: "TIE" }),
+      h("span.nm-badge.ap-q-badge", { text: ax.name })
+    ),
+    h("div.ap-serif.ap-q-text", { text: q.t }),
+    h("div.ap-tie-options", {}, options)
+  );
+
+  card._sync = () => {
+    options.forEach((b) => {
+      const on = state.ans[key] === b.dataset.side;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.classList.toggle("is-selected", on);
+    });
+  };
+  card._sync();
+  card.dataset.qIndex = key;
+  return card;
+}
+
+function pickTie(key, side) {
+  setState({ ans: { ...state.ans, [key]: side } }, { render: false });
+  saveDraft();
+  syncCard(key);
   syncProgress();
   syncNav();
 }
@@ -281,8 +346,10 @@ function syncCard(idx) {
 
 function syncProgress() {
   const core = onCore();
-  const done = core ? answeredCore(state.ans) : answeredOptional(state.ans, state.ops);
-  const total = core ? coreCount() : optionalCount(state.ops);
+  const done = core
+    ? answeredCore(state.ans) + answeredTie(state.ans)
+    : answeredOptional(state.ans, state.ops);
+  const total = core ? coreTotal(state.ans) : optionalCount(state.ops, state.ans);
   els.countLabel.textContent = `${done} / ${total}`;
   els.progressBar.setAttribute("aria-valuemax", String(total));
   els.progressBar.setAttribute("aria-valuenow", String(done));
@@ -295,14 +362,14 @@ function isPageComplete() {
 
 function syncNav() {
   // レイヤーを1つ終えるたびに結果画面へ抜ける
-  els.prev.disabled = nextPageIndex(state.page, state.ops, -1) === -1;
+  els.prev.disabled = nextPageIndex(state.page, state.ops, -1, state.ans) === -1;
   els.next.disabled = !isPageComplete();
-  els.next.textContent = isLayerEnd(state.page, state.ops) ? "結果を見る" : "つぎへ";
+  els.next.textContent = isLayerEnd(state.page, state.ops, state.ans) ? "結果を見る" : "つぎへ";
 }
 
 function goPrev() {
   clearTimeout(advanceTimer);
-  const prev = nextPageIndex(state.page, state.ops, -1);
+  const prev = nextPageIndex(state.page, state.ops, -1, state.ans);
   if (prev === -1) return;
   setState({ page: prev }, { render: false });
   saveDraft();
@@ -313,10 +380,10 @@ function goPrev() {
 function goNext() {
   clearTimeout(advanceTimer);
   if (!isPageComplete()) return;
-  const next = nextPageIndex(state.page, state.ops);
+  const next = nextPageIndex(state.page, state.ops, 1, state.ans);
 
   // レイヤーを1つ終えるたびに結果を見せる。続きは結果画面の導線から。
-  if (isLayerEnd(state.page, state.ops)) {
+  if (isLayerEnd(state.page, state.ops, state.ans)) {
     setState({
       screen: "result",
       page: next === -1 ? state.page : next,

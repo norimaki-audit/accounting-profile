@@ -141,9 +141,15 @@ function renderHeader(tp, res, code, mod) {
         })
       : null,
     h("div.ap-result-actions", {},
-      btn("button.nm-btn.nm-btn--primary.nm-btn--lg", {
+      // ボタンではなく本物のリンクにする。JS で開くとポップアップ扱いになり
+      // ブロックされることがあるが、リンクなら通常のタブ遷移として必ず開く。
+      // 画像を添付できる端末だけ、クリックを横取りして OS の共有シートへ回す。
+      h("a.nm-btn.nm-btn--primary.nm-btn--lg.ap-share-link", {
+        href: intentUrl(res, code, tp),
+        target: "_blank",
+        rel: "noopener noreferrer",
         text: "Xで結果をシェア",
-        onClick: () => shareToX(res, code, tp),
+        onClick: (e) => shareToX(e, res, code, tp),
       }),
       copyBtn,
       btn("button.nm-btn.nm-btn--tertiary", {
@@ -207,12 +213,11 @@ function prepareShareFile(result, code) {
 
 const shareText = (tp) => `会計人16タイプ、私は「${tp.name}」でした\n#会計人プロフィール`;
 
-function openIntent(res, code, tp) {
-  window.open(
+/** X の投稿画面の URL。共有ボタンの href にそのまま入れる。 */
+function intentUrl(res, code, tp) {
+  return (
     `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText(tp))}` +
-      `&url=${encodeURIComponent(shareUrl(res, code))}`,
-    "_blank",
-    "noopener"
+    `&url=${encodeURIComponent(shareUrl(res, code))}`
   );
 }
 
@@ -229,24 +234,24 @@ const canUseOsShare = () =>
   window.matchMedia("(pointer: coarse)").matches;
 
 /**
- * 画像1枚を主役にして共有する。
- * 使えない環境ではテキスト + URL で X を開く。その場合もリンク先の
- * og:image でアーキタイプの動物がカードに出る。
+ * 共有ボタンのクリック。
+ *
+ * 既定はリンクの遷移（href に X の投稿画面が入っている）。画像を添付できる
+ * 端末のときだけ横取りして OS の共有シートへ回す。横取りに失敗したら
+ * preventDefault していないので、そのままリンクとして X が開く。
  */
-function shareToX(res, code, tp) {
-  if (shareFile && canUseOsShare() && navigator.canShare({ files: [shareFile] })) {
-    // url は別フィールドにせず本文へ入れる。受け取り側アプリによっては
-    // files + text + url のうち一部しか拾わず、本文が落ちることがあるため。
-    navigator
-      .share({ files: [shareFile], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
-      .catch((err) => {
-        // ユーザーが共有シートを閉じただけのときは、勝手に別の共有を始めない
-        if (err && err.name === "AbortError") return;
-        openIntent(res, code, tp);
-      });
-    return;
-  }
-  openIntent(res, code, tp);
+function shareToX(event, res, code, tp) {
+  if (!shareFile || !canUseOsShare() || !navigator.canShare({ files: [shareFile] })) return;
+  event.preventDefault();
+  // url は別フィールドにせず本文へ入れる。受け取り側アプリによっては
+  // files + text + url のうち一部しか拾わず、本文が落ちることがあるため。
+  navigator
+    .share({ files: [shareFile], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
+    .catch((err) => {
+      // 共有シートを閉じただけのときは、勝手に別の共有を始めない
+      if (err && err.name === "AbortError") return;
+      window.location.href = intentUrl(res, code, tp);
+    });
 }
 
 function retake() {

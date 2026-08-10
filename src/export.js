@@ -898,11 +898,25 @@ export async function downloadSquareCard(result, code) {
  * スマホの共有シートに渡すには重い）。
  */
 export async function buildShareFile(result, code) {
+  return toShareFile(await renderShareCardIfPossible(result, code), code, "");
+}
+
+/** Instagram 用の正方形カードを File にする。 */
+export async function buildSquareShareFile(result, code) {
   if (typeof File !== "function" || !navigator.canShare) return null;
-  const canvas = await renderShareCard(result, code);
+  return toShareFile(await renderSquareCard(result, code), code, "-square");
+}
+
+async function renderShareCardIfPossible(result, code) {
+  if (typeof File !== "function" || !navigator.canShare) return null;
+  return renderShareCard(result, code);
+}
+
+async function toShareFile(canvas, code, suffix) {
+  if (!canvas) return null;
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
   if (!blob) return null;
-  const file = new File([blob], `accounting-profile-${code}.jpg`, { type: "image/jpeg" });
+  const file = new File([blob], `accounting-profile-${code}${suffix}.jpg`, { type: "image/jpeg" });
   return navigator.canShare({ files: [file] }) ? file : null;
 }
 

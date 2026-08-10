@@ -5,7 +5,7 @@ import {
   missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
-import { buildShareFile, downloadSheet, downloadSquareCard } from "../export.js";
+import { buildShareFile, buildSquareShareFile, downloadSheet, downloadSquareCard } from "../export.js";
 
 const anim = (name, delay) =>
   prefersReducedMotion() ? null : `animation:${name} var(--ap-anim-${name}) ${delay}ms both`;
@@ -47,7 +47,7 @@ export function renderResult() {
 
   const missing = missingLayers(personal, state.ops);
   // 共有ボタンが押される前に画像を用意しておく（navigator.share は待てないため）
-  if (!state.preview && res) prepareShareFile(res, code);
+  if (!state.preview && res) prepareShareFiles(res, code);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
     renderHeader(tp, res, code, archetypeModifier(personal)),
@@ -115,6 +115,8 @@ function renderHeader(tp, res, code, mod) {
       ? "共有された会計人プロフィール"
       : "あなたの会計人プロフィール";
 
+  const shareStatus = h("p.nm-supporting-text.ap-download-status.ap-share-status", { hidden: true });
+
   const copyBtn = btn("button.nm-btn.nm-btn--secondary.nm-btn--lg", {
     text: "結果リンクをコピー",
     onClick: (e) => {
@@ -148,8 +150,14 @@ function renderHeader(tp, res, code, mod) {
         href: intentUrl(res, code, tp),
         target: "_blank",
         rel: "noopener noreferrer",
-        text: "Xで結果をシェア",
+        text: "Xでシェア",
         onClick: (e) => shareToX(e, res, code, tp),
+      }),
+      // Instagram は X と並ぶ共有先として独立させる。渡せるのは画像だけなので、
+      // スマホは共有シート経由、デスクトップは保存して手で投稿してもらう。
+      btn("button.nm-btn.nm-btn--secondary.nm-btn--lg.ap-share-ig", {
+        text: canUseOsShare() ? "Instagramでシェア" : "Instagram用に保存",
+        onClick: (e) => shareToInstagram(res, code, shareStatus, e.currentTarget),
       }),
       copyBtn,
       btn("button.nm-btn.nm-btn--tertiary", {
@@ -157,6 +165,7 @@ function renderHeader(tp, res, code, mod) {
         onClick: retake,
       })
     ),
+    shareStatus,
     // 名前の由来はここでしか説明できないので残す。ただし読む流れを止めないよう
     // ボタンのあと・キャラクターの手前に 1 行だけ置く。
     h("p.nm-supporting-text.ap-result-note", {
@@ -184,29 +193,35 @@ function shareUrl(res, code) {
  * 画像を生成して await すると、その間に操作の権利が切れて弾かれることがあるので、
  * 押されたときには同期的に渡せる状態にしておく。
  */
-let shareFile = null;
-let shareFileKey = null;    // shareFile が指す内容の指紋（成功したときだけ記録する）
+const shareFiles = { wide: null, square: null };   // 用意できた File
+let shareFilesKey = null;   // shareFiles が指す内容の指紋（そろったときだけ記録する）
 let sharePendingKey = null; // 生成中の指紋
 
 /** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
 const shareKey = (result, code) =>
   [code, archetypeModifier(result) || "", result.axes.map((a) => a.pct).join(".")].join("|");
 
-function prepareShareFile(result, code) {
+function prepareShareFiles(result, code) {
+  // OS の共有シートを使わない端末（デスクトップ）では File を作らない。
+  // X はリンクで開き、Instagram はダウンロードするので、どちらも要らない。
+  if (!canUseOsShare()) return;
   const key = shareKey(result, code);
   // 失敗した回でキーを覚えてしまうと二度と作り直せなくなるので、成功時だけ記録する
-  if (shareFileKey === key || sharePendingKey === key) return;
-  shareFile = null;
-  shareFileKey = null;
+  if (shareFilesKey === key || sharePendingKey === key) return;
+  shareFiles.wide = null;
+  shareFiles.square = null;
+  shareFilesKey = null;
   sharePendingKey = key;
-  buildShareFile(result, code)
-    .then((file) => {
+  Promise.all([buildShareFile(result, code), buildSquareShareFile(result, code)])
+    .then(([wide, square]) => {
       if (sharePendingKey !== key) return;
       sharePendingKey = null;
-      if (file) { shareFile = file; shareFileKey = key; }
+      shareFiles.wide = wide;
+      shareFiles.square = square;
+      if (wide || square) shareFilesKey = key;
     })
     .catch(() => {
-      // 画像を作れない環境ではテキスト共有に落とす（次の描画で再挑戦できる）
+      // 作れない環境ではリンク／ダウンロードに落とす（次の描画で再挑戦できる）
       if (sharePendingKey === key) sharePendingKey = null;
     });
 }
@@ -241,17 +256,42 @@ const canUseOsShare = () =>
  * preventDefault していないので、そのままリンクとして X が開く。
  */
 function shareToX(event, res, code, tp) {
-  if (!shareFile || !canUseOsShare() || !navigator.canShare({ files: [shareFile] })) return;
+  const file = shareFiles.wide;
+  if (!file || !canUseOsShare() || !navigator.canShare({ files: [file] })) return;
   event.preventDefault();
   // url は別フィールドにせず本文へ入れる。受け取り側アプリによっては
   // files + text + url のうち一部しか拾わず、本文が落ちることがあるため。
   navigator
-    .share({ files: [shareFile], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
+    .share({ files: [file], text: `${shareText(tp)}\n${shareUrl(res, code)}` })
     .catch((err) => {
       // 共有シートを閉じただけのときは、勝手に別の共有を始めない
       if (err && err.name === "AbortError") return;
       window.location.href = intentUrl(res, code, tp);
     });
+}
+
+/**
+ * Instagram へ。
+ *
+ * Instagram はリンクカードを持たず、キャプションのリンクも押せないので、
+ * 渡せるのは画像だけ。スマホでは OS の共有シートに Instagram が出るのでそこへ
+ * 正方形カードを渡す。デスクトップには共有先が無いので、画像を保存して
+ * 手で投稿してもらう。
+ */
+function shareToInstagram(result, code, statusEl, button) {
+  const file = shareFiles.square;
+  if (file && canUseOsShare() && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).catch((err) => {
+      if (err && err.name === "AbortError") return;
+      runDownload(button, statusEl, "画像を保存しました。Instagram から投稿してください。", () =>
+        downloadSquareCard(result, code)
+      );
+    });
+    return;
+  }
+  runDownload(button, statusEl, "正方形カードを保存しました。Instagram から投稿してください。", () =>
+    downloadSquareCard(result, code)
+  );
 }
 
 function retake() {
@@ -277,22 +317,12 @@ function renderDownloadPanel(result, code, missing) {
         "画面を閉じると同じ結果は取り出せません。",
         missing.length ? `いまの画像には${5 - missing.length}レイヤーが入ります。` : null
       ),
-      h("span.ap-download-actions", {},
-        btn("button.nm-btn.nm-btn--primary", {
-          text: "画像で保存",
-          onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
-            downloadSheet(result, code)
-          ),
-        }),
-        // Instagram はリンクカードを持たず、キャプションのリンクも押せないので、
-        // 貼れるのは画像だけ。正方形を別に用意する。
-        btn("button.nm-btn.nm-btn--secondary", {
-          text: "SNS用カード",
-          onClick: (e) => runDownload(e.currentTarget, status, "SNS用の正方形カードを保存しました。", () =>
-            downloadSquareCard(result, code)
-          ),
-        })
-      )
+      btn("button.nm-btn.nm-btn--primary", {
+        text: "画像で保存",
+        onClick: (e) => runDownload(e.currentTarget, status, "画像を保存しました。", () =>
+          downloadSheet(result, code)
+        ),
+      })
     ),
     status
   );

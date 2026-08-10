@@ -604,6 +604,11 @@ h2,
   min-height: 42px;
 }
 
+.ap-share-status {
+  margin-top: var(--space-2);
+  text-align: center;
+}
+
 .ap-download-status {
   margin-top: var(--space-2);
   color: var(--brand-800);
@@ -1428,7 +1433,7 @@ h2,
     padding: var(--space-2) 0 var(--space-4);
   }
 
-  /* シェアだけ1行使い、コピーと作り直しは2列に並べる（3つ縦積みだと絵が押し下がる） */
+  /* X と Instagram はそれぞれ1行使い、コピーと作り直しは2列に並べる */
   .ap-result-actions .nm-btn--primary {
     flex: 1 0 100%;
   }
@@ -1438,6 +1443,11 @@ h2,
     flex: 1;
     min-width: 0;
     padding-inline: var(--space-2);
+  }
+
+  /* Instagram も --secondary なので、上の 2 列指定に負けないよう後ろで強くする */
+  .ap-result-actions .nm-btn.ap-share-ig {
+    flex: 1 0 100%;
   }
 }
 

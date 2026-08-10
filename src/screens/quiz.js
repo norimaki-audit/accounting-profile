@@ -93,7 +93,7 @@ function renderPage() {
   clear(els.body);
 
   if (page.kind === "tie") {
-    els.hint.textContent = "同じくらいの重みで答えた軸があります。ここだけ、どちらかを選んでください。";
+    els.hint.textContent = "ふだんの自分に近いほうを選んでください。";
     tiedAxes(state.ans).forEach((ai) => els.body.append(renderTieCard(ai)));
   } else if (page.kind === "op") {
     els.hint.textContent = page.op.kind === "practice"
@@ -205,28 +205,27 @@ function toggleNa(idx) {
  * 「どちらでもない」は置かない（置くと同点が解けない）。
  */
 function renderTieCard(ai) {
-  const ax = D.styleAxes[ai];
   const q = D.styleTie.find((t) => t.ax === ai);
   const key = TIE_KEY(ai);
 
+  // 極の名前（検証／探索 など）は出さない。ラベルを見せると、いつもの自分ではなく
+  // 「その言葉に当てはまるほう」を選ぶ判断になってしまう。
   const options = [
-    { side: "L", label: q.l, pole: ax.lName },
-    { side: "R", label: q.r, pole: ax.rName },
+    { side: "L", label: q.l },
+    { side: "R", label: q.r },
   ].map((o) =>
     btn("button.ap-tie-option", {
       "aria-pressed": "false",
       "data-side": o.side,
       onClick: () => pickTie(key, o.side),
     },
-      h("span.nm-mono.ap-tie-pole", { text: o.pole }),
       h("span.ap-tie-label", { text: o.label })
     )
   );
 
   const card = h("div.nm-surface.ap-q.ap-tie", {},
     h("div.ap-q-meta", {},
-      h("span.nm-mono.ap-q-num", { text: "TIE" }),
-      h("span.nm-badge.ap-q-badge", { text: ax.name })
+      h("span.nm-badge.ap-q-badge", { text: SECTION_LABEL.B })
     ),
     h("div.ap-serif.ap-q-text", { text: q.t }),
     h("div.ap-tie-options", {}, options)

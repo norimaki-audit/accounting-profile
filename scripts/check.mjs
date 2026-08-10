@@ -247,6 +247,11 @@ group("同点の軸");
     D.styleAxes.every((_, ai) => D.styleTie.filter((t) => t.ax === ai).length === 1));
   ok("二択に「どちらでもない」を置かない",
     D.styleTie.every((t) => t.l && t.r && !("m" in t)));
+  // 極の名前を見せると、いつもの自分ではなく「その言葉に合うほう」を選んでしまう
+  ok("二択の文面に極の名前を出さない", (() => {
+    const poles = D.styleAxes.flatMap((ax) => [ax.lName, ax.rName]);
+    return D.styleTie.every((t) => poles.every((w) => !`${t.t}${t.l}${t.r}`.includes(w)));
+  })());
 
   // 同点があるときだけ二択ページを出す
   const tiePage = S.pages().find((p) => p.kind === "tie");

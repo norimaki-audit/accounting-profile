@@ -1,9 +1,9 @@
 import { h, btn, clear, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
-  likertItems, pages, pageCount, corePageCount, isPageDone, isLayerEnd,
-  coreCount, optionalCount, answeredCore, answeredOptional,
-  subjectPool, computeResult, NA,
+  likertItems, pages, corePageCount, isPageDone, isLayerEnd,
+  activePages, nextPageIndex, coreCount, optionalCount,
+  answeredCore, answeredOptional, subjectPool, computeResult, NA, NONE,
 } from "../scoring.js";
 import { state, setState, saveDraft } from "../state.js";
 
@@ -78,13 +78,17 @@ function renderPage() {
   const items = likertItems();
   const page = pages()[state.page];
 
-  // 進捗はコア／任意で別々に数える。コア中に「41/56」と出すと未完了感が出るため。
+  // 進捗はコア／任意で別々に数える。コア中に「16/56」と出すと未完了感が出るため。
+  // ページ番号は出題するページだけで数える（受験なしで飛ばす科目3問は含めない）。
   const core = onCore();
+  const active = activePages(state.ops);
   els.stageLabel.textContent = core ? "STEP 1 — アーキタイプが出るまで" : "STEP 2 — プロフィールを埋める";
   els.stageLabel.classList.toggle("nm-badge--brand", core);
+  const optional = active.filter((p) => !p.core);
+  const posInOptional = optional.findIndex((p) => p === page) + 1;
   els.pageLabel.textContent = core
     ? `PAGE ${state.page + 1} / ${corePageCount()}`
-    : `PAGE ${state.page - corePageCount() + 1} / ${pageCount() - corePageCount()}`;
+    : `PAGE ${posInOptional} / ${optional.length}`;
   els.body.className = `ap-quiz-body ap-quiz-body--${state.page % 2 === 0 ? "a" : "b"}`;
   clear(els.body);
 
@@ -166,7 +170,7 @@ function pickLikert(idx, value, page) {
   syncNav();
 
   // レイヤーの切れ目では自動で進めない（結果画面へ飛ばしてしまうため）
-  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !isLayerEnd(state.page)) {
+  if (page.indices.every((i) => state.ans[i] != null) && autoAdvanceEnabled() && !isLayerEnd(state.page, state.ops)) {
     clearTimeout(advanceTimer);
     advanceTimer = setTimeout(() => goNext(), 350);
   }
@@ -191,7 +195,7 @@ function renderOpCard(op) {
     : op.kind === "subject"
       ? subjectPool(state.ops)
       : D.profile.practiceDomains.slice();
-  if (op.none) pool = pool.concat(["とくになし"]);
+  if (op.none) pool = pool.concat([NONE]);
 
   const chips = pool.map((label) =>
     btn("button.ap-chip", {
@@ -232,10 +236,10 @@ function toggleChip(op, label) {
   if (pos >= 0) {
     current.splice(pos, 1);
   } else {
-    if (label === "とくになし") {
+    if (label === NONE) {
       current.length = 0;
     } else {
-      const noneAt = current.indexOf("とくになし");
+      const noneAt = current.indexOf(NONE);
       if (noneAt >= 0) current.splice(noneAt, 1);
     }
     if (current.length < op.max) current.push(label);
@@ -275,11 +279,11 @@ function syncCard(idx) {
 function syncProgress() {
   const core = onCore();
   const done = core ? answeredCore(state.ans) : answeredOptional(state.ans, state.ops);
-  const total = core ? coreCount() : optionalCount();
+  const total = core ? coreCount() : optionalCount(state.ops);
   els.countLabel.textContent = `${done} / ${total}`;
   els.progressBar.setAttribute("aria-valuemax", String(total));
   els.progressBar.setAttribute("aria-valuenow", String(done));
-  els.progressFill.style.width = `${Math.round((100 * done) / total)}%`;
+  els.progressFill.style.width = `${Math.round((100 * done) / Math.max(1, total))}%`;
 }
 
 function isPageComplete() {
@@ -288,15 +292,16 @@ function isPageComplete() {
 
 function syncNav() {
   // レイヤーを1つ終えるたびに結果画面へ抜ける
-  els.prev.disabled = state.page === 0;
+  els.prev.disabled = nextPageIndex(state.page, state.ops, -1) === -1;
   els.next.disabled = !isPageComplete();
-  els.next.textContent = isLayerEnd(state.page) ? "結果を見る" : "つぎへ";
+  els.next.textContent = isLayerEnd(state.page, state.ops) ? "結果を見る" : "つぎへ";
 }
 
 function goPrev() {
   clearTimeout(advanceTimer);
-  if (state.page === 0) return;
-  setState({ page: state.page - 1 }, { render: false });
+  const prev = nextPageIndex(state.page, state.ops, -1);
+  if (prev === -1) return;
+  setState({ page: prev }, { render: false });
   saveDraft();
   renderPage();
   scrollTop();
@@ -305,12 +310,13 @@ function goPrev() {
 function goNext() {
   clearTimeout(advanceTimer);
   if (!isPageComplete()) return;
+  const next = nextPageIndex(state.page, state.ops);
 
   // レイヤーを1つ終えるたびに結果を見せる。続きは結果画面の導線から。
-  if (isLayerEnd(state.page)) {
+  if (isLayerEnd(state.page, state.ops)) {
     setState({
       screen: "result",
-      page: Math.min(state.page + 1, pageCount() - 1),
+      page: next === -1 ? state.page : next,
       result: computeResult(state.ans, state.ops),
       preview: false,
       previewCode: null,
@@ -320,7 +326,7 @@ function goNext() {
     return;
   }
 
-  setState({ page: state.page + 1 }, { render: false });
+  setState({ page: next }, { render: false });
   saveDraft();
   renderPage();
   scrollTop();

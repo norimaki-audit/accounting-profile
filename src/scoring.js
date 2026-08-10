@@ -61,13 +61,41 @@ export function pages() {
   return out;
 }
 
+export const NONE = "とくになし";
+
+/** 受験経験があるか。S0 で「受験経験なし」だけを選んだ人は無し扱い。 */
+export const hasExamExperience = (ops) =>
+  (ops.S0 || []).some((g) => g !== "受験経験なし");
+
+/**
+ * そのページを出題するか。
+ * 会計事務所職員・監査アシスタント・経理補助など受験していない人に、
+ * 勉強したことのない科目を選ばせないための判定。
+ */
+export function pageApplies(page, ops) {
+  if (page.kind === "op" && page.op.kind === "subject") return hasExamExperience(ops);
+  return true;
+}
+
+/** 出題対象のページだけを返す。 */
+export const activePages = (ops) => pages().filter((p) => pageApplies(p, ops));
+
+/** i の次に出題するページ番号。出題しないページは飛ばす。-1 なら以降なし。 */
+export function nextPageIndex(i, ops, dir = 1) {
+  const all = pages();
+  for (let k = i + dir; k >= 0 && k < all.length; k += dir) {
+    if (pageApplies(all[k], ops)) return k;
+  }
+  return -1;
+}
+
 /**
  * そのページがレイヤーの最終ページか。
  * ここで結果画面へ戻し、増えたレイヤーをその場で見せる（性格を足したら修飾語が付く、など）。
  */
-export function isLayerEnd(i) {
-  const all = pages();
-  return i >= all.length - 1 || all[i + 1].layer !== all[i].layer;
+export function isLayerEnd(i, ops = {}) {
+  const next = nextPageIndex(i, ops);
+  return next === -1 || pages()[next].layer !== pages()[i].layer;
 }
 
 export const pageCount = () => pages().length;
@@ -79,7 +107,12 @@ export const coreIndices = () => pages().filter((p) => p.core).flatMap((p) => p.
 
 export const totalCount = () => likertItems().length + D.profile.ops.length;
 export const coreCount = () => coreIndices().length;
-export const optionalCount = () => totalCount() - coreCount();
+
+/** 任意パートの回答数。出題しないページ（受験なしの科目3問）は数に入れない。 */
+export const optionalCount = (ops = {}) =>
+  activePages(ops)
+    .filter((p) => !p.core)
+    .reduce((n, p) => n + (p.kind === "op" ? 1 : p.indices.length), 0);
 
 /** コアの回答済み数 */
 export function answeredCore(ans) {
@@ -88,16 +121,16 @@ export function answeredCore(ans) {
 
 /** 任意パート（Personality + Study + DNA）の回答済み数 */
 export function answeredOptional(ans, ops) {
-  const likert = pages()
-    .filter((p) => p.kind === "likert" && !p.core)
-    .flatMap((p) => p.indices)
-    .filter((i) => ans[i] != null).length;
-  const opsDone = D.profile.ops.filter((op) => (ops[op.id] || []).length > 0).length;
-  return likert + opsDone;
+  return activePages(ops)
+    .filter((p) => !p.core)
+    .reduce((n, p) => n + (p.kind === "op"
+      ? ((ops[p.op.id] || []).length > 0 ? 1 : 0)
+      : p.indices.filter((i) => ans[i] != null).length), 0);
 }
 
 /** ページが埋まっているか（Likert は全問回答、DNA は 1 つ以上選択）。 */
 export function isPageDone(page, ans, ops) {
+  if (!pageApplies(page, ops)) return true;   // 出題しないページは埋まっている扱い
   return page.kind === "op"
     ? (ops[page.op.id] || []).length > 0
     : page.indices.every((i) => ans[i] != null);
@@ -116,16 +149,16 @@ export function firstIncompletePage(ans, ops, from = 0) {
   return Math.max(from, all.length - 1);
 }
 
-/** S0（経験資格）に応じて出題する科目リストを切り替える。未選択なら全科目。 */
+/**
+ * S0（経験資格）に応じて出題する科目リストを切り替える。
+ * 受験経験がなければ空（科目3問はそもそも出題しない）。
+ */
 export function subjectPool(ops) {
-  const selected = ops.S0 || [];
+  if (!hasExamExperience(ops)) return [];
   let pool = [];
-  selected.forEach((g) => {
+  (ops.S0 || []).forEach((g) => {
     if (D.profile.subjectGroups[g]) pool = pool.concat(D.profile.subjectGroups[g]);
   });
-  if (!pool.length) {
-    Object.values(D.profile.subjectGroups).forEach((a) => { pool = pool.concat(a); });
-  }
   return pool;
 }
 
@@ -210,9 +243,10 @@ function scoreSubject(ops) {
 /** Practice DNA: P1 経験 / P2 好き / P3 やりたい の組み合わせをタグにして上位 4。 */
 function scorePractice(ops) {
   const weights = {};
-  const experienced = (ops.P1 || []).filter((l) => l !== "とくになし");
-  const liked = ops.P2 || [];
-  const wanted = ops.P3 || [];
+  const pick = (id) => (ops[id] || []).filter((l) => l !== NONE);
+  const experienced = pick("P1");
+  const liked = pick("P2");
+  const wanted = pick("P3");
 
   liked.forEach((l) => { weights[l] = (weights[l] || 0) + 2; });
   wanted.forEach((l, rank) => { weights[l] = (weights[l] || 0) + [3, 2, 1][rank]; });
@@ -237,6 +271,20 @@ function scorePractice(ops) {
     .slice(0, 4);
 }
 
+/**
+ * レイヤーごとに「答え終わったか」。
+ * 中身の有無では判定できない。「とくになし」と答えた人は結果が空になるが、
+ * それは未回答ではないので、続きを促してはいけない。
+ */
+function answeredLayers(ans, ops) {
+  const out = {};
+  activePages(ops).forEach((p) => {
+    if (p.core) return;
+    out[p.layer] = (out[p.layer] ?? true) && isPageDone(p, ans, ops);
+  });
+  return out;
+}
+
 /** 全回答から結果を確定する。5 レイヤーは合算しない。 */
 export function computeResult(ans, ops) {
   const items = likertItems();
@@ -248,6 +296,8 @@ export function computeResult(ans, ops) {
     study: scoreStudy(ans, items),
     subjectTop: scoreSubject(ops),
     practiceTop: scorePractice(ops),
+    answered: answeredLayers(ans, ops),
+    examExperience: hasExamExperience(ops),
     fromAnswers: true,
   };
 }
@@ -282,24 +332,28 @@ export function archetypeModifier(result) {
  * まだ答えていない任意レイヤーの一覧（結果画面の「続きへ」導線に使う）。
  * コアだけで結果を見た人と、最後まで答えた人で同じ結果画面を使い回すための判定。
  */
-export function missingLayers(result) {
+export function missingLayers(result, ops = {}) {
   if (!result || !result.fromAnswers) return [];
-  const out = [];
-  // 出題順（Personality → Study → DNA）で並べる。先頭が「次に足すもの」になる。
-  if (!result.bf || D.traitOrder.every((tr) => result.bf[tr] == null)) {
-    out.push({
-      key: "personality", name: "Personality", jp: "性格",
+  // 「答え終わったか」で判定する。中身の有無で見ると、「とくになし」と答えた人に
+  // 永久に続きを促してしまう。answered が無い古い結果は中身から推定する。
+  const done = result.answered || {};
+  const doneOr = (key, fallback) => (key in done ? done[key] : fallback);
+  const opCount = (kind) => D.profile.ops.filter((o) => kind.includes(o.kind)).length;
+
+  const all = [
+    { key: "personality", name: "Personality", jp: "性格",
       n: D.bigfive.length - D.profile.dropBF.length,
-    });
-  }
-  if (!studyGroups(result).length) out.push({ key: "study", name: "Study Behavior", jp: "勉強のしかた", n: D.study.length });
-  if (!result.subjectTop || !result.subjectTop.length) {
-    out.push({ key: "subject", name: "Subject DNA", jp: "好きな科目", n: D.profile.ops.filter((o) => o.kind === "subject" || o.kind === "groups").length });
-  }
-  if (!result.practiceTop || !result.practiceTop.length) {
-    out.push({ key: "practice", name: "Practice DNA", jp: "興味のある実務", n: D.profile.ops.filter((o) => o.kind === "practice").length });
-  }
-  return out;
+      filled: doneOr("personality", !!result.bf && D.traitOrder.some((tr) => result.bf[tr] != null)) },
+    { key: "study", name: "Study Behavior", jp: "勉強のしかた", n: D.study.length,
+      filled: doneOr("study", studyGroups(result).length > 0) },
+    { key: "subject", name: "Subject DNA", jp: "好きな科目",
+      // 受験していない人には科目3問を出さないので、残りは S0 の1問だけ
+      n: hasExamExperience(ops) ? opCount(["subject", "groups"]) : opCount(["groups"]),
+      filled: doneOr("subject", !!result.subjectTop && result.subjectTop.length > 0) },
+    { key: "practice", name: "Practice DNA", jp: "興味のある実務", n: opCount(["practice"]),
+      filled: doneOr("practice", !!result.practiceTop && result.practiceTop.length > 0) },
+  ];
+  return all.filter((l) => !l.filled).map(({ filled, ...rest }) => rest);
 }
 
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */

@@ -13,8 +13,8 @@ const FEATURES = [
   { kicker: "1 WORK STYLE", title: "仕事の進め方", body: "精密/俯瞰・検証/探索・構造/適応・深掘/協働の独自4軸。アーキタイプはここから決まります。" },
   { kicker: "2 PERSONALITY", title: "性格", body: "Big Five（公開心理尺度を参考にした独自項目）。良し悪しの判定はしません。" },
   { kicker: "3 STUDY BEHAVIOR", title: "勉強のしかた", body: "想起練習・エラー分析など、いま身についている行動をタグで。" },
-  { kicker: "4 SUBJECT DNA", title: "好きな科目", body: "会計士系・税理士系・簿記、あなたの経験に合わせた科目で聞きます。" },
-  { kicker: "5 PRACTICE DNA", title: "興味のある実務", body: "経験・好き・今後やりたいを区別。未経験は「これから」なだけ。" },
+  { kicker: "4 SUBJECT DNA", title: "好きな科目", body: "会計士系・税理士系・簿記から、受験経験に合わせて出題。受験していなければ飛ばします。" },
+  { kicker: "5 PRACTICE DNA", title: "興味のある実務", body: "記帳・仕訳から M&A まで24領域。経験・好き・今後やりたいを区別します。" },
 ];
 
 export function startQuiz() {
@@ -52,14 +52,14 @@ export function renderHome() {
   const draft = loadDraft();
   const saved = draft ? answeredCount(draft.ans, draft.ops || {}) : 0;
   const canResume = saved > 0 && saved < totalCount();
-  // コアまで答えていれば結果を再表示できる（41問そろえばアーキタイプは確定する）
+  // コアまで答えていれば結果を再表示できる（16問そろえばアーキタイプは確定する）
   const canReplay = !!draft && coreAnswered(draft.ans);
 
   return h("div", { "data-screen-label": "トップ", class: "ap-home" },
     h("div.nm-mono.ap-kicker", { text: `16 ARCHETYPES · まず${coreCount()}問` }),
     h("h1.ap-hero-title", {}, "あなたの会計人としての", h("br"), "すべてを、一枚に。"),
     h("p.ap-lead", {},
-      "会計士・税理士・経理・受験生のためのプロフィールメーカー。性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを",
+      "会計事務所・監査法人・経理で働く人のためのプロフィールメーカー。資格の有無は問いません。性格・仕事の進め方・好きな科目・興味のある実務・勉強のしかたを",
       h("strong", { text: "5つの別レイヤー" }),
       "で可視化します。「何タイプか」だけでは終わらせません。"
     ),

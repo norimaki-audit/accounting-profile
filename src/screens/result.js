@@ -45,7 +45,7 @@ export function renderResult() {
     if (style) node.setAttribute("style", `${node.getAttribute("style") || ""};${style}`);
   });
 
-  const missing = missingLayers(personal);
+  const missing = missingLayers(personal, state.ops);
   // 共有ボタンが押される前に画像を用意しておく（navigator.share は待てないため）
   if (!state.preview && res) prepareShareFile(res, code);
 

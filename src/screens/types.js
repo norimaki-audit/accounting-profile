@@ -66,22 +66,39 @@ export function renderTypes() {
  * 線も矢印も距離の数値も引かない。位置に置くだけで関係が読めるので、
  * 近い遠いに良し悪しを与えずに済む。
  */
-const axisLine = (dir, axes) =>
-  `${dir}：${axes.map((a) => `${a.name}（${a.lName}／${a.rName}）`).join(" × ")}`;
-
 function renderGrid(mine) {
   const g = typeGrid();
   const cells = [];
 
-  // 列見出し（進め方×作業様式）。行見出しは各行の上に置く。
-  // 左に見出し列を作ると絵が 70px まで痩せて、暗い絵の動物が判別できなくなる。
+  // 左上の角（2行ぶん）＝ たての軸名。その右の帯 ＝ よこの軸名。
+  // 軸名を表の中に入れておかないと、見出しの「精密・検証」が何の値なのか分からない。
+  // 「たて」「よこ」を付けないと、角のラベルが行の軸名だと伝わらない
+  cells.push(h("div.ap-grid-corner", {},
+    h("span.ap-grid-dir", { text: "たて" }),
+    g.rowAxes.map((a, i) => [
+      i ? h("span.ap-grid-x", { text: "×" }) : null,
+      h("span", { text: a.name }),
+    ])
+  ));
+  cells.push(h("div.ap-grid-banner", {},
+    h("span.ap-grid-dir", { text: "よこ" }),
+    h("span", { text: g.colAxes.map((a) => a.name).join(" × ") })
+  ));
+
+  // 列見出し（極の組）。セルと同じ列に、同じ幅で並べる。
+  // 2語の間に × を挟む。並べるだけだと1つの複合語に見える。
   g.cols.forEach((c) =>
-    cells.push(h("div.nm-mono.ap-grid-head", {},
-      h("span", { text: c[0] }), h("span", { text: c[1] })))
+    cells.push(h("div.ap-grid-head", {},
+      h("span", { text: c[0] }), h("span.ap-grid-x", { text: "×" }), h("span", { text: c[1] })))
   );
 
   g.cells.forEach((row, r) => {
-    cells.push(h("div.nm-mono.ap-grid-row-label", { text: g.rows[r].join("・") }));
+    // 行見出し（極の組）。行の左に置き、罫線で表の見出しとして見せる
+    cells.push(h("div.ap-grid-head.ap-grid-head--row", {},
+      h("span", { text: g.rows[r][0] }),
+      h("span.ap-grid-x", { text: "×" }),
+      h("span", { text: g.rows[r][1] })));
+
     row.forEach((code) => {
       const tp = D.types[code];
       const isMine = mine === code;
@@ -92,7 +109,7 @@ function renderGrid(mine) {
       cells.push(btn("button.ap-grid-cell", {
         class: isMine ? "is-mine" : null,
         "aria-label": `${tp.name}（${D.animals[code]}）`,
-        title: tp.name,
+        title: `${tp.name}（${D.animals[code]}）`,
         onClick: () => {
           setState({ screen: "result", preview: true, previewCode: code, previewFromPath: false });
           scrollTop();
@@ -101,7 +118,8 @@ function renderGrid(mine) {
         h("span.ap-grid-art", {
           style: `background:linear-gradient(120deg,${tp.c[0]},${tp.c[1]})`,
         }, img),
-        h("span.ap-grid-animal", { text: D.animals[code] }),
+        // 絵だけだと暗い絵の動物が判別できない。名前を添えて、絵は雰囲気に回す
+        h("span.ap-grid-name", { text: tp.name }),
         isMine ? h("span.ap-grid-you", { text: "あなた" }) : null
       ));
     });
@@ -109,13 +127,11 @@ function renderGrid(mine) {
 
   return h("section.ap-grid-wrap", {},
     h("h3.ap-serif.ap-grid-title", { text: "16タイプの位置関係" }),
-    // 見出しの「精密・検証」がどの軸の極なのかは、ここで対応を書かないと伝わらない
-    h("p.nm-supporting-text.ap-grid-lead", { text: axisLine("たて", g.rowAxes) }),
-    h("p.nm-supporting-text.ap-grid-lead", { text: axisLine("よこ", g.colAxes) }),
-    h("p.nm-supporting-text.ap-grid-lead", {
+    h("div.ap-grid", {}, cells),
+    // 表の下に置く。上に置くと4行目が画面から溢れる
+    h("p.nm-supporting-text.ap-grid-note", {
       text: "たて・よこに隣り合うタイプは、軸が1つだけ違います（左右・上下の端どうしも隣です）。",
-    }),
-    h("div.ap-grid", {}, cells)
+    })
   );
 }
 

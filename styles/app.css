@@ -1544,7 +1544,10 @@ h2,
   color: var(--text-secondary);
 }
 
-/* 16タイプの位置関係（4×4）。線は引かず、置き場所だけで関係を見せる */
+/* 16タイプの位置関係（4×4）。線は引かず、置き場所だけで関係を見せる
+ *
+ * 罫線は container の背景色 + 1px の gap で作る。表として見えないと、
+ * 見出しと絵と名前が別々のものに見えてしまう（実機で指摘された）。 */
 
 .ap-grid-wrap {
   margin: 0 0 var(--space-6);
@@ -1555,57 +1558,79 @@ h2,
   margin-bottom: var(--space-1);
 }
 
-.ap-grid-lead {
-  margin: 0 0 4px;
-}
-
-.ap-grid-lead + .ap-grid + * { margin-top: 0; }
-
-.ap-grid-lead:last-of-type {
-  margin-bottom: var(--space-3);
+.ap-grid-note {
+  margin: var(--space-2) 0 0;
 }
 
 .ap-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  grid-template-columns: 36px repeat(4, 1fr);
+  gap: 1px;
+  padding: 1px;
+  background: var(--border-default);
+  border: 1px solid var(--border-default);
 }
 
-/* 列見出し。極の名前を2語、縦に積む */
-.ap-grid-head {
+/* 左上の角 = たての軸名。2行ぶん占める */
+.ap-grid-corner {
+  grid-row: span 2;
   display: grid;
-  align-content: end;
+  align-content: center;
   justify-items: center;
   gap: 1px;
-  font-size: 0.5625rem;
-  letter-spacing: 0.04em;
-  line-height: 1.35;
-  color: var(--brand-700);
-  padding-bottom: 2px;
+  padding: 2px 0;
+  font-size: 0.625rem;
+  line-height: 1.25;
+  color: var(--brand-800);
+  background: var(--surface-muted);
 }
 
-/* 行見出しは行の上に敷く。左に見出し列を作ると絵が痩せて動物が読めなくなる */
-.ap-grid-row-label {
-  grid-column: 1 / -1;
-  /* 上に離し、下は詰める。どの行の見出しかを迷わせないため */
-  margin: 10px 0 -2px;
-  font-size: 0.5625rem;
+/* たて／よこ。軸名だけだと、どちらの見出しの話か分からない */
+.ap-grid-dir {
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* 2語のあいだの区切り。並べるだけだと1つの複合語に見える */
+.ap-grid-x {
+  font-size: 0.5rem;
+  color: var(--text-muted);
+}
+
+/* よこの軸名。列見出しの上に帯として敷く */
+.ap-grid-banner {
+  grid-column: span 4;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 0.625rem;
   letter-spacing: 0.06em;
-  color: var(--brand-700);
+  color: var(--brand-800);
+  background: var(--surface-muted);
 }
 
-.ap-grid-row-label:first-of-type {
-  margin-top: 4px;
+/* 極の組。列見出しはセルと同じ列・同じ幅、行見出しは行の左 */
+.ap-grid-head {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 3px 0;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: var(--brand-700);
+  background: var(--brand-50);
 }
 
 .ap-grid-cell {
   position: relative;
   display: grid;
-  gap: 2px;
+  grid-template-rows: auto 1fr;
   padding: 0;
   cursor: pointer;
-  border: 1px solid var(--border-subtle);
-  border-radius: 2px;
+  border: 0;
   background: var(--surface-card);
   color: var(--text-primary);
   font: inherit;
@@ -1625,10 +1650,10 @@ h2,
   object-fit: cover;
 }
 
-.ap-grid-animal {
+.ap-grid-name {
   display: block;
-  padding: 0 2px 3px;
-  font-size: 0.5625rem;
+  padding: 2px 2px 3px;
+  font-size: 0.625rem;
   line-height: 1.3;
   color: var(--text-secondary);
   text-align: center;
@@ -1636,8 +1661,12 @@ h2,
 
 /* 自分のタイプ。順位ではなく現在地なので、枠と小さなラベルだけにする */
 .ap-grid-cell.is-mine {
-  border-color: var(--brand-500);
-  box-shadow: inset 0 0 0 1px var(--brand-500);
+  box-shadow: inset 0 0 0 2px var(--brand-500);
+}
+
+.ap-grid-cell.is-mine .ap-grid-name {
+  color: var(--brand-800);
+  font-weight: 700;
 }
 
 .ap-grid-you {

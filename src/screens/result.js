@@ -147,9 +147,23 @@ function renderHeader(tp, res, code, mod) {
     text: "結果リンクをコピー",
     onClick: (e) => {
       const target = e.currentTarget;
-      navigator.clipboard?.writeText(shareUrl(res, code)).catch(() => {});
-      target.textContent = "コピーしました ✓";
-      setTimeout(() => { target.textContent = "結果リンクをコピー"; }, 1600);
+      const url = shareUrl(res, code);
+      const say = (label) => {
+        target.textContent = label;
+        setTimeout(() => { target.textContent = "結果リンクをコピー"; }, 1600);
+      };
+      // 成功したときだけ成功と言う。以前は Promise の結果を待たずに
+      // 「コピーしました ✓」を出していたので、Clipboard API の無い
+      // アプリ内ブラウザや権限拒否のときも成功したように見えていた。
+      const failed = () => {
+        say("コピーできませんでした");
+        // 押した人が困らないよう、URL をその場に出して手で選べるようにする
+        shareStatus.classList.remove("ap-download-status--error");
+        shareStatus.textContent = `コピーできませんでした。このリンクを選んでコピーしてください: ${url}`;
+        shareStatus.hidden = false;
+      };
+      if (!navigator.clipboard || !navigator.clipboard.writeText) { failed(); return; }
+      navigator.clipboard.writeText(url).then(() => say("コピーしました ✓"), failed);
     },
   });
 

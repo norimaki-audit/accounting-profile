@@ -187,8 +187,14 @@ export const plannedCount = (ops = {}, ans = {}) => coreCount() + optionalCount(
  * 受験していない人は 53 で終わるので、56 と比べると全部答えても未完了に見える。
  */
 export function canResume(ans, ops = {}) {
-  const saved = answeredCount(ans || {}, ops);
-  return saved > 0 && saved < plannedCount(ops, ans || {});
+  const a = ans || {};
+  const saved = answeredCount(a, ops);
+  if (saved === 0) return false;
+  // 二択は「出題される総数」に数えていないので、件数の比較だけでは未回答を
+  // 見落とす。全部答えたあとに戻って回答を変え、同点ができた場合がこれにあたる
+  // （答える道が無くなり、極が内部の計算で決まったままになる）。
+  if (answeredTie(a) < tiedAxes(a).length) return true;
+  return saved < plannedCount(ops, a);
 }
 
 /** コアの回答済み数 */

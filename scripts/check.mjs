@@ -67,13 +67,23 @@ group("静的ページの中身");
 for (const code of D.typeOrder) {
   const html = await readFile(join(ROOT, `t/${code}/index.html`), "utf8");
   const tp = D.types[code];
+  // 説明文（og:description / twitter:description / meta description / noscript）は
+  // copy と tokucho から作る。data.js を直して再生成し忘れると、リンクカードだけ
+  // 古い文言のまま残る。中身まで照合する。
+  const desc = `「${tp.copy}」${tp.tokucho}`;
+  const esc = (s) => String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const checks = [
     html.includes(`<title>${tp.name}（${D.animals[code]}） — 会計人プロフィール</title>`),
     html.includes(`/assets/cards/${code}.jpg`),
     html.includes('content="summary_large_image"'),
     html.includes(`/t/${code}/`),
+    html.includes(`property="og:description" content="${esc(desc)}"`),
+    html.includes(`name="twitter:description" content="${esc(desc)}"`),
+    html.includes(`<p>「${esc(tp.copy)}」</p>`),
+    html.includes(`<p>${esc(tp.tokucho)}</p>`),
   ];
-  ok(`${code} タイトル・og:image・カード種別・canonical`, checks.every(Boolean), checks.join(","));
+  ok(`${code} タイトル・og:image・カード種別・canonical・説明文`, checks.every(Boolean), checks.join(","));
 }
 {
   const html = await readFile(join(ROOT, "index.html"), "utf8");
@@ -112,9 +122,12 @@ group("受験していない人");
   ok("S0 がレイヤーの終端になる", S.isLayerEnd(s0, noExam) === true);
   ok("受験ありなら S0 は終端でない", S.isLayerEnd(s0, withExam) === false);
 
-  // 全部答えたら「つづきから再開」を出さない（実際の総数と比べる）
+  // 全部答えたら「つづきから再開」を出さない（実際の総数と比べる）。
+  // 全問「やや当てはまる」だと4軸とも同点になるので、二択にも答えた状態にする。
+  // ここを空のままにすると「答え終わった人」を表せない。
   const ans = {};
   S.likertItems().forEach((_, i) => { ans[i] = 1; });
+  S.tiedAxes(ans).forEach((ai) => { ans[S.TIE_KEY(ai)] = "L"; });
   const ops = { S0: [S.NO_EXAM], P1: [S.NONE], P2: [S.NONE], P3: [S.NONE] };
   const saved = S.answeredCount(ans, ops);
   eq("全部答えると53", saved, 53);
@@ -123,6 +136,7 @@ group("受験していない人");
   ok("途中なら「つづきから再開」を出す", S.canResume({ 25: 1 }, ops) === true);
   ok("受験ありで56問すべてなら出さない", (() => {
     const full = {}; S.likertItems().forEach((_, i) => { full[i] = 1; });
+    S.tiedAxes(full).forEach((ai) => { full[S.TIE_KEY(ai)] = "L"; });
     const o = { S0: ["税理士系"], S1: ["簿記論"], S2: ["簿記論"], S3: ["簿記論"],
                 P1: [S.NONE], P2: [S.NONE], P3: [S.NONE] };
     return S.answeredCount(full, o) === 56 && S.canResume(full, o) === false;
@@ -404,6 +418,74 @@ group("極の意味");
   const types = await readFile(join(ROOT, "src", "screens", "types.js"), "utf8");
   ok("Work Style のバーの下に出す", /ap-axis-hint[\s\S]{0,80}axisHint/.test(res));
   ok("図鑑の表の下に凡例を出す", /ap-axis-legend[\s\S]{0,200}axisHint/.test(types));
+}
+
+group("細かな抜け");
+{
+  const res = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
+  const app = await readFile(join(ROOT, "src", "app.js"), "utf8");
+  const css = await readFile(join(ROOT, "styles", "app.css"), "utf8");
+  const html = await readFile(join(ROOT, "index.html"), "utf8");
+
+  // コピーは成功したときだけ成功と言う
+  ok("コピーは Promise の結果を見てから伝える",
+    /writeText\(url\)\.then\(/.test(res) && !/writeText\([^)]*\)\.catch\(\(\) => \{\}\)/.test(res));
+  ok("コピーできなかったことを伝える", /コピーできませんでした/.test(res));
+
+  // 戻る／進むのどちら向きでもスクロール位置が戻る。
+  // history.state は「進むとき」しか更新できないので、離れる瞬間の位置を控える。
+  ok("画面を離れる瞬間に位置を控える",
+    /function keepScroll/.test(app) && /scrollByNav/.test(app));
+  // 進むとき（pushHistory）と戻るとき（onPopState）の両方で控える必要がある
+  eq("進むときと戻るときの両方で控える", (app.match(/keepScroll\(\);/g) || []).length, 2);
+  {
+    const at = app.indexOf("function onPopState");
+    const body = app.slice(at, app.indexOf("\n}", at));
+    ok("戻る操作でも控える", /keepScroll\(\);/.test(body));
+  }
+  ok("復元は控えた位置を優先する", /scrollByNav\.has\(saved\)/.test(app));
+  // 描画していないタブでは scroll イベントも rAF も飛ばない。どちらにも頼らない
+  ok("スクロール復元は scroll イベントに頼らない", !/addEventListener\("scroll"/.test(app));
+
+  // 丸はマスからはみ出さない（はみ出すと隣のマスの上に乗り、押す場所がずれる）
+  ok("回答の丸はマスより大きくしない", /width: min\(var\(--ap-dot\), 100%\)/.test(css));
+  // 狭い画面ではラベルを別の行に出してマスを広げる
+  ok("狭い画面でラベルを丸の行から出す", /@media \(max-width: 360px\)/.test(css));
+
+  // 使われていないセレクタを残さない
+  for (const sel of ["ap-type-diff-n", "ap-bar--sm"]) {
+    ok(`${sel} は残っていない`, !css.includes(sel));
+  }
+
+  // 対象者の書き方をそろえる（og:description だけ略していた）
+  const audience = "公認会計士・税理士から、受験生・監査アシスタント・会計事務所職員・経理／経理補助まで";
+  ok("meta description の対象者", html.includes(audience));
+  const og = html.match(/property="og:description" content="([^"]*)"/);
+  ok("og:description の対象者", !!og && og[1].startsWith(audience), og ? og[1].slice(0, 40) : "(見つからない)");
+  const home = await readFile(join(ROOT, "src", "screens", "home.js"), "utf8");
+  ok("トップの対象者", home.includes(`${audience}。`));
+
+  // 全部答えたあとに戻って同点を作ったら、二択へ戻す道を残す
+  const items = S.likertItems();
+  const ops = { S0: [S.NO_EXAM], P1: [S.NONE], P2: [S.NONE], P3: [S.NONE] };
+  // 同点の出ない答え方で全部埋める（極の向きにそろえる）
+  const full = {};
+  items.forEach((q, i) => {
+    full[i] = q.sec === "B" ? (q.p === D.styleAxes[q.ax].L ? 2 : -2) : 1;
+  });
+  eq("この答え方なら同点は出ない", S.tiedAxes(full).length, 0);
+  ok("全部答え終われば再開を出さない", S.canResume(full, ops) === false);
+
+  // 完了後に戻って1軸を同点にする（二択は未回答のまま）
+  const tied = { ...full };
+  items.forEach((q, i) => { if (q.sec === "B" && q.ax === 0) tied[i] = 1; });
+  eq("1軸だけ同点になる", S.tiedAxes(tied).length, 1);
+  eq("回答数は変わらない", S.answeredCount(tied, ops), S.answeredCount(full, ops));
+  ok("二択が未回答なら再開を出す", S.canResume(tied, ops) === true,
+    `tied=${S.tiedAxes(tied)} answeredTie=${S.answeredTie(tied)}`);
+  const answered = { ...tied };
+  S.tiedAxes(tied).forEach((ai) => { answered[S.TIE_KEY(ai)] = "L"; });
+  ok("二択に答えたら再開は消える", S.canResume(answered, ops) === false);
 }
 
 group("プライバシー文言");

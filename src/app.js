@@ -86,11 +86,24 @@ const navKey = () => JSON.stringify(NAV_KEYS.map((k) => state[k]));
 let currentNav = null;
 let restoring = false;   // 戻る操作での復元中は積み直さない
 
+// 画面ごとのスクロール位置。history.state にも書くが、そちらは「進むとき」しか
+// 更新できない（戻る操作で離れたエントリには、離れたあとでは書けない）。
+// そのままだと戻ってから進んだときに先頭へ飛ぶので、離れる瞬間の位置をここに控える。
+// scroll イベントは使わない（描画していないタブでは飛ばず、replaceState の
+// 連打はブラウザに弾かれる）。画面を離れる瞬間だけ記録すれば足りる。
+const scrollByNav = new Map();
+
+/** 画面を離れる瞬間の位置を控える。popstate の時点ではまだ前の画面の位置。 */
+function keepScroll() {
+  if (currentNav) scrollByNav.set(currentNav, window.scrollY);
+}
+
 function pushHistory() {
   const key = navKey();
   if (key === currentNav) return;
   if (restoring) { currentNav = key; return; }
   // 離れる画面のスクロール位置を、いま居るエントリに残してから積む
+  keepScroll();
   history.replaceState({ nav: currentNav, scroll: window.scrollY }, "");
   history.pushState({ nav: key, scroll: 0 }, "");
   currentNav = key;
@@ -117,6 +130,8 @@ function onPopState(e) {
   if (!saved) return;   // 自分が積んだエントリでなければ触らない
   // 4問そろえた直後に戻ると、350ms 後の自動送りが戻った先で発火する
   cancelAutoAdvance();
+  // 描き替える前に、離れる画面の位置を控える
+  keepScroll();
   const [screen, page, preview, previewCode, previewFromPath] = JSON.parse(saved);
   restoring = true;
   // 戻すのは画面の位置だけ。回答（ans / ops）と結果はそのまま持ち越す
@@ -135,7 +150,9 @@ function onPopState(e) {
   // スクロール位置を戻す。setState の時点で DOM は組み直されているので同期で戻せる。
   // requestAnimationFrame は使わない（タブが表に出ていないと発火せず、戻したはずの
   // 位置が先頭のままになる）。画像の読み込みで高さが伸びる場合に備えて一度だけ追う。
-  const y = e.state.scroll || 0;
+  // この場で控えた位置を優先する。history.state 側は「進むとき」しか更新
+  // できないので、戻ってから進んだ画面では 0 のまま残っている。
+  const y = scrollByNav.has(saved) ? scrollByNav.get(saved) : (e.state.scroll || 0);
   const back = () => { if (window.scrollY !== y) window.scrollTo(0, y); };
   back();
   setTimeout(back, 0);

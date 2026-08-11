@@ -156,7 +156,11 @@ function renderHeader(tp, res, code, mod) {
     h("h2.ap-result-name", { style: anim("tmPop", 130), text: tp.name }),
     h("p.ap-serif.ap-result-copy", { style: anim("tmPop", 260), text: `「${tp.copy}」` }),
     state.preview
-      ? h("p.ap-preview-note", { text: "※ 図鑑のプレビュー表示です（あなたの結果ではありません）" })
+      ? h("p.ap-preview-note", {
+          text: state.previewFromPath
+            ? "※ アーキタイプの紹介ページです。個人の結果（4軸の数値）は含まれていません。"
+            : "※ 図鑑のプレビュー表示です（あなたの結果ではありません）",
+        })
       : null,
     shared
       ? h("p.ap-preview-note", {
@@ -200,8 +204,13 @@ function renderHeader(tp, res, code, mod) {
  */
 function shareUrl(res, code) {
   const page = `${D.siteRoot()}t/${code}/`;
-  return res && !state.preview && res.fromAnswers
-    ? `${page}#p=${res.code}.${res.axes.map((a) => a.pct).join(".")}`
+  // 数値を載せる条件は「4軸を持っているか」。以前は fromAnswers（自分の回答から
+  // 出した結果か）を条件にしていたため、共有リンクを開いた人がもう一度コピーすると
+  // 数値だけ落ちた。転送されるほど中身が減り、受け取った側は「アーキタイプは合って
+  // いるのに数値だけ無い」状態を見ることになる。
+  const axes = !state.preview && res && res.axes;
+  return axes && axes.every((a) => a.pct != null)
+    ? `${page}#p=${res.code}.${axes.map((a) => a.pct).join(".")}`
     : page;
 }
 

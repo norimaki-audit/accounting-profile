@@ -11,7 +11,10 @@ import { renderQuiz } from "./screens/quiz.js";
 import { renderResult } from "./screens/result.js";
 import { renderTypes } from "./screens/types.js";
 
-const SHARE_HASH = /#p=([PB][VX][SA][DC])\.(\d+)\.(\d+)\.(\d+)\.(\d+)/;
+// 共有された結果。ハッシュに載せるのは、直接開いてもサーバーへ送られないため。
+// 読むときだけは ?p= も受ける（アプリによってはフラグメントを落とすことがあるため）。
+// こちらから ?p= を作ることはしない。
+const SHARE_DATA = /[#?&]p=([PB][VX][SA][DC])\.(\d+)\.(\d+)\.(\d+)\.(\d+)/;
 // アーキタイプ別の静的ページ /t/{CODE}/ — X のリンクカードに動物を出すために存在する
 const ARCHETYPE_PATH = /\/t\/([PB][VX][SA][DC])\/?$/;
 
@@ -87,7 +90,7 @@ function boot() {
   appEl.append(renderAppbar(), h("main.ap-main", {}, screenEl), renderFooter());
 
   // 共有リンクからの復元。Work Style とアーキタイプのみを表示する。
-  const match = (location.hash || "").match(SHARE_HASH);
+  const match = `${location.hash || ""}${location.search || ""}`.match(SHARE_DATA);
   const onPath = (location.pathname || "").replace(/index\.html$/, "").match(ARCHETYPE_PATH);
   if (match && D.types[match[1]]) {
     setState({
@@ -95,8 +98,13 @@ function boot() {
       result: resultFromPcts(match[1], [+match[2], +match[3], +match[4], +match[5]]),
     }, { render: false });
   } else if (onPath && D.types[onPath[1]]) {
-    // ハッシュのない /t/{CODE}/ は、そのアーキタイプの紹介（図鑑プレビュー）として開く
-    setState({ screen: "result", preview: true, previewCode: onPath[1] }, { render: false });
+    // 数値の付いていない /t/{CODE}/ は、そのアーキタイプの紹介ページとして開く。
+    // 図鑑から開いたプレビューと同じ画面だが、ここへ来た人は共有リンクをたどって
+    // いる可能性がある。数値が無いのを「そういう結果」と読まれないよう、
+    // 紹介ページであることを別の文で伝える。
+    setState({
+      screen: "result", preview: true, previewCode: onPath[1], previewFromPath: true,
+    }, { render: false });
   } else {
     // 回答途中の下書きがあれば読み込む（結果ではなく下書きのみ）
     const draft = loadDraft();

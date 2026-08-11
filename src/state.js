@@ -20,6 +20,7 @@ export const state = {
   result: null,
   preview: false,     // 図鑑からのプレビュー表示か
   previewCode: null,
+  previewFromPath: false,  // /t/{CODE}/ を直接開いた（共有リンクをたどった可能性がある）
 };
 
 export function subscribe(fn) {

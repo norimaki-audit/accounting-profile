@@ -338,6 +338,33 @@ group("共有リンク");
   ok("共有リンクからは性格を復元しない", r.bf === null);
 }
 
+group("共有リンクの転送");
+{
+  // 共有リンクを開いた人がもう一度コピーしても、数値が落ちないこと。
+  // 以前は fromAnswers を条件にしていたため、1回転送するだけで数値が消えた。
+  const src = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
+  const at = src.indexOf("function shareUrl");
+  // コメントには経緯として fromAnswers が出てくるので、コードの行だけ見る
+  const fn = src.slice(at, src.indexOf("\n}", at))
+    .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  ok("数値を載せる条件は fromAnswers ではない", !/fromAnswers/.test(fn));
+  ok("4軸がそろっていれば載せる", /axes\.every\(\(a\) => a\.pct != null\)/.test(fn));
+
+  // 復元した結果も4軸を持っている（= 転送しても同じリンクを作れる）
+  const restored = S.resultFromPcts("PVSD", [100, 100, 100, 100]);
+  ok("復元した結果も4軸の数値を持つ", restored.axes.every((a) => a.pct != null));
+
+  // 読むときは ?p= も受ける（フラグメントを落とすアプリがあっても開けるように）。
+  // ただしこちらから ?p= を作ることはしない（作るとサーバーの記録に数値が残る）
+  const app = await readFile(join(ROOT, "src", "app.js"), "utf8");
+  ok("?p= も読める", /SHARE_DATA = \/\[#\?&\]p=/.test(app));
+  ok("生成するのは #p= だけ", !/\?p=\$\{/.test(src) && /#p=\$\{/.test(src));
+
+  // 数値なしで /t/{CODE}/ に来た人に、個人の結果ではないと分かる文を出す
+  ok("数値なしの紹介ページはその旨を出す",
+    /previewFromPath/.test(app) && /個人の結果（4軸の数値）は含まれていません/.test(src));
+}
+
 group("共有ボタン");
 {
   // X は「リンクとして開く」だけにする。クリックを横取りして navigator.share() を

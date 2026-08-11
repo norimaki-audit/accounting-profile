@@ -406,6 +406,26 @@ group("極の意味");
   ok("図鑑の表の下に凡例を出す", /ap-axis-legend[\s\S]{0,200}axisHint/.test(types));
 }
 
+group("プライバシー文言");
+{
+  // 画像（Instagram 用の正方形カード）には性格から作った一言も描かれる。
+  // 「性格は渡しません」と書くと、実際に渡っているものを隠すことになる。
+  const home = await readFile(join(ROOT, "src", "screens", "home.js"), "utf8");
+  const exportSrc = await readFile(join(ROOT, "src", "export.js"), "utf8");
+  const square = exportSrc.slice(exportSrc.indexOf("export async function renderSquareCard"));
+
+  // まず実装side: 正方形カードが本当に性格を描いているか
+  ok("正方形カードは性格から作った一言を描く",
+    /archetypeModifier\(result\)/.test(square) && /personalityTags\(result\)/.test(square));
+
+  // 文言がそれを認めているか
+  ok("画像に性格が入ることを書いている", /画像[^"]{0,20}性格/.test(home));
+  ok("性格は渡さない、と書いていない", !/性格・科目・実務・勉強の回答は渡しません/.test(home));
+  // 通常利用と共有操作の区別は保つ
+  ok("通常利用では送信しないことを書いている", /通常利用では回答・結果を外部へ送信しません/.test(home));
+  ok("渡るのは共有操作のときだけ、と書いている", /共有操作を行った場合に限り/.test(home));
+}
+
 group("トップの導線");
 {
   // コア16問で終えるのが本線。ここを「つづき」と排他にすると、本線どおりに

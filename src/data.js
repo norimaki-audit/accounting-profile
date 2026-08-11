@@ -80,12 +80,20 @@ export const style = [
   { t: "自分の結論は、固まる前に人にぶつけて反応を見たい", ax: 3, p: "C" },
 ];
 
+// lHint/rHint は極の一言。lDesc/rDesc（13〜14字）は Profile Map の中でしか出せず、
+// しかも勝った側の4極しか出ないので、8極とも意味が分からないまま名前だけを
+// 読まされる場所があった（Work Style のバー、図鑑、16タイプの表）。
+// 左右を1行に並べられる長さで持つ。
 export const styleAxes = [
-  { name: "視座", L: "P", R: "B", lName: "精密", rName: "俯瞰", lDesc: "ディテール・数値の正確性志向", rDesc: "全体構造・ビジネス文脈志向", lNode: "精密レンズ", rNode: "俯瞰レンズ" },
-  { name: "推論", L: "V", R: "X", lName: "検証", rName: "探索", lDesc: "根拠・基準への当てはめ重視", rDesc: "仮説形成・未知の論点重視", lNode: "検証コンパス", rNode: "探索コンパス" },
-  { name: "進め方", L: "S", R: "A", lName: "構造", rName: "適応", lDesc: "計画・標準化・段取り重視", rDesc: "即応・走りながらの調整重視", lNode: "構造エンジン", rNode: "適応エンジン" },
-  { name: "作業様式", L: "D", R: "C", lName: "深掘", rName: "協働", lDesc: "独立・単独深掘り", rDesc: "対話・共同作業", lNode: "深掘モード", rNode: "協働モード" },
+  { name: "視座", L: "P", R: "B", lName: "精密", rName: "俯瞰", lHint: "数値の正確さ", rHint: "全体の構造", lDesc: "ディテール・数値の正確性志向", rDesc: "全体構造・ビジネス文脈志向", lNode: "精密レンズ", rNode: "俯瞰レンズ" },
+  { name: "推論", L: "V", R: "X", lName: "検証", rName: "探索", lHint: "根拠と基準", rHint: "仮説から試す", lDesc: "根拠・基準への当てはめ重視", rDesc: "仮説形成・未知の論点重視", lNode: "検証コンパス", rNode: "探索コンパス" },
+  { name: "進め方", L: "S", R: "A", lName: "構造", rName: "適応", lHint: "段取りが先", rHint: "走りながら", lDesc: "計画・標準化・段取り重視", rDesc: "即応・走りながらの調整重視", lNode: "構造エンジン", rNode: "適応エンジン" },
+  { name: "作業様式", L: "D", R: "C", lName: "深掘", rName: "協働", lHint: "一人で深く", rHint: "話しながら", lDesc: "独立・単独深掘り", rDesc: "対話・共同作業", lNode: "深掘モード", rNode: "協働モード" },
 ];
+
+/** 極の意味を1行にしたもの（例:「精密＝数値の正確さ ／ 俯瞰＝全体の構造」）。 */
+export const axisHint = (ax) =>
+  `${ax.lName}＝${ax.lHint} ／ ${ax.rName}＝${ax.rHint}`;
 
 // 同点になった軸にだけ出す二択。
 //

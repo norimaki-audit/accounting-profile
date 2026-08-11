@@ -131,7 +131,14 @@ function renderGrid(mine) {
     // 表の下に置く。上に置くと4行目が画面から溢れる
     h("p.nm-supporting-text.ap-grid-note", {
       text: "たて・よこに隣り合うタイプは、軸が1つだけ違います（左右・上下の端どうしも隣です）。",
-    })
+    }),
+    // 表には極の名前しか出ないので、意味をここで一度だけ示す
+    h("dl.ap-axis-legend", {},
+      D.styleAxes.map((ax) => [
+        h("dt.nm-mono", { text: ax.name }),
+        h("dd", { text: D.axisHint(ax) }),
+      ])
+    )
   );
 }
 

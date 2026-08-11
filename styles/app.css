@@ -1680,6 +1680,32 @@ h2,
   background: var(--brand-500);
 }
 
+/* 極の一言。バーの下・表の下に置く */
+.ap-axis-hint {
+  margin: 6px 0 0;
+  font-size: var(--font-size-supporting);
+  color: var(--text-muted);
+}
+
+.ap-axis-legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-supporting);
+  color: var(--text-secondary);
+}
+
+.ap-axis-legend dt {
+  font-size: 0.625rem;
+  color: var(--brand-700);
+  align-self: baseline;
+}
+
+.ap-axis-legend dd {
+  margin: 0;
+}
+
 .ap-near-more {
   margin-top: var(--space-3);
   padding: 10px 0;

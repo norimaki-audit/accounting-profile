@@ -389,6 +389,23 @@ group("タイプ同士の距離");
       await readFile(join(ROOT, "src", "screens", "types.js"), "utf8")));
 }
 
+group("極の意味");
+{
+  // 8極すべてに一言がある。Profile Map（既定で畳んである）を開かないと
+  // 意味が分からない状態だったので、名前だけが出る場所には一言を添える
+  ok("8極すべてに一言がある",
+    D.styleAxes.every((a) => a.lHint && a.rHint));
+  ok("左右を1行に並べられる長さ（各8字以内）",
+    D.styleAxes.every((a) => a.lHint.length <= 8 && a.rHint.length <= 8),
+    D.styleAxes.map((a) => `${a.lHint}/${a.rHint}`).join(" "));
+  eq("1行の形", D.axisHint(D.styleAxes[0]), "精密＝数値の正確さ ／ 俯瞰＝全体の構造");
+
+  const res = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
+  const types = await readFile(join(ROOT, "src", "screens", "types.js"), "utf8");
+  ok("Work Style のバーの下に出す", /ap-axis-hint[\s\S]{0,80}axisHint/.test(res));
+  ok("図鑑の表の下に凡例を出す", /ap-axis-legend[\s\S]{0,200}axisHint/.test(types));
+}
+
 group("戻る操作（履歴）");
 {
   const raw = await readFile(join(ROOT, "src", "app.js"), "utf8");

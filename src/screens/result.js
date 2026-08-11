@@ -584,7 +584,9 @@ function renderWorkStyle(axes) {
               text: (!winLeft && pct != null ? `${pct} ` : "") + a.ax.rName,
             })
           ),
-          h("div.ap-axis-bar", {}, fill, h("div.ap-axis-center"), marker)
+          h("div.ap-axis-bar", {}, fill, h("div.ap-axis-center"), marker),
+          // 極の名前だけでは意味が分からない。バーの下に一言だけ添える
+          h("p.ap-axis-hint", { text: D.axisHint(a.ax) })
         );
       })
     )

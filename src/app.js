@@ -14,7 +14,8 @@ import { renderTypes } from "./screens/types.js";
 // 共有された結果。ハッシュに載せるのは、直接開いてもサーバーへ送られないため。
 // 読むときだけは ?p= も受ける（アプリによってはフラグメントを落とすことがあるため）。
 // こちらから ?p= を作ることはしない。
-const SHARE_DATA = /[#?&]p=([PB][VX][SA][DC])\.(\d+)\.(\d+)\.(\d+)\.(\d+)/;
+// 末尾の1桁は修飾語の番号（性格まで答えた人だけ付く）。無くても読める。
+const SHARE_DATA = /[#?&]p=([PB][VX][SA][DC])\.(\d+)\.(\d+)\.(\d+)\.(\d+)(?:\.(\d))?/;
 // アーキタイプ別の静的ページ /t/{CODE}/ — X のリンクカードに動物を出すために存在する
 const ARCHETYPE_PATH = /\/t\/([PB][VX][SA][DC])\/?$/;
 
@@ -184,7 +185,7 @@ function boot() {
   if (match && D.types[match[1]]) {
     setState({
       screen: "result",
-      result: resultFromPcts(match[1], [+match[2], +match[3], +match[4], +match[5]]),
+      result: resultFromPcts(match[1], [+match[2], +match[3], +match[4], +match[5]], match[6]),
     }, { render: false });
   } else if (onPath && D.types[onPath[1]]) {
     // 数値の付いていない /t/{CODE}/ は、そのアーキタイプの紹介ページとして開く。

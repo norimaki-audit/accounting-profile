@@ -620,6 +620,42 @@ group("共有リンクの転送");
     /previewFromPath/.test(app) && /個人の結果（4軸の数値）は含まれていません/.test(src));
 }
 
+group("性格の一言を共有に載せる");
+{
+  const res = await readFile(join(ROOT, "src", "screens", "result.js"), "utf8");
+  const app = await readFile(join(ROOT, "src", "app.js"), "utf8");
+  const bf = (o) => ({ bf: { E: 50, A: 50, C: 50, S: 50, O: 50, ...o } });
+
+  // 番号で往復する（語をそのまま URL に入れると、言い回しを変えたとき古いリンクが残る）
+  eq("修飾語なしは 0", S.modifierCode(bf({})), 0);
+  ok("4つの修飾語すべてが番号と往復する", [
+    [{ A: 100 }, "まわりを立てる"], [{ A: 0 }, "率直な"],
+    [{ S: 100 }, "動じない"], [{ S: 0 }, "機微に気づく"],
+  ].every(([o, word]) => {
+    const n = S.modifierCode(bf(o));
+    return n > 0 && S.modifierFromCode(n) === word;
+  }));
+  eq("0 からは戻らない", S.modifierFromCode(0), null);
+  eq("範囲外からは戻らない", S.modifierFromCode(9), null);
+
+  // 復元した結果でも一言が出る（性格そのものは復元しない）
+  const restored = S.resultFromPcts("PVSD", [100, 100, 100, 100], 1);
+  eq("復元した結果に一言が乗る", S.archetypeModifier(restored), "まわりを立てる");
+  eq("性格そのものは復元しない", restored.bf, null);
+  eq("番号が無ければ一言も無い", S.archetypeModifier(S.resultFromPcts("PVSD", [100, 100, 100, 100])), null);
+
+  // リンクは、付く人だけ末尾が伸びる（旧リンクをそのまま読めるように）
+  ok("番号が 0 のときは末尾を付けない", /mod \? `\.\$\{mod\}` : ""/.test(res));
+  ok("読む側は末尾を省略できる", app.includes("(?:\\.(\\d))?"));
+
+  // 投稿本文にも入れる
+  ok("投稿本文に一言を添える", /shareText = \(tp, mod\)/.test(res) && /mod \? `\$\{mod\} ` : ""/.test(res));
+  // 図鑑プレビューは他人の紹介なので、自分の一言を混ぜない
+  // 画面の見出しと投稿本文の2か所。片方だけ守っても、もう片方から漏れる
+  eq("プレビューでは一言を出さない（見出しと本文の2か所）",
+    (res.match(/state\.preview \? null : archetypeModifier\(res\)/g) || []).length, 2);
+}
+
 group("共有ボタン");
 {
   // X は「リンクとして開く」だけにする。クリックを横取りして navigator.share() を

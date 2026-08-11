@@ -2,7 +2,7 @@ import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
   evidence, studyGroups, studyOn, studyLabel, habitLines,
-  missingLayers, archetypeModifier, firstIncompletePage, corePageCount, neighbors,
+  missingLayers, archetypeModifier, modifierCode, firstIncompletePage, corePageCount, neighbors,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { buildSquareShareFile, downloadSheet, downloadSquareCard } from "../export.js";
@@ -49,7 +49,9 @@ export function renderResult() {
   const missing = missingLayers(personal, state.ops);
 
   return h("div.ap-result", { "data-screen-label": "結果画面" },
-    renderHeader(tp, res, code, archetypeModifier(personal)),
+    // 修飾語は共有リンクからの復元でも出す（リンクに番号で載っている）。
+    // 図鑑プレビューは他人の紹介ページなので出さない。
+    renderHeader(tp, res, code, state.preview ? null : archetypeModifier(res)),
     visual,
     personal ? renderContinuePanel(missing) : null,
     personal ? renderDownloadPanel(personal, code, missing) : null,
@@ -228,9 +230,12 @@ function shareUrl(res, code) {
   // 数値だけ落ちた。転送されるほど中身が減り、受け取った側は「アーキタイプは合って
   // いるのに数値だけ無い」状態を見ることになる。
   const axes = !state.preview && res && res.axes;
-  return axes && axes.every((a) => a.pct != null)
-    ? `${page}#p=${res.code}.${axes.map((a) => a.pct).join(".")}`
-    : page;
+  if (!axes || !axes.every((a) => a.pct != null)) return page;
+  // 性格まで答えた人の一言も一緒に渡す。答えていない人のリンクは今までと同じ形
+  // （番号 0 は付けない）なので、既に配られたリンクもそのまま読める。
+  const mod = modifierCode(res);
+  const pcts = axes.map((a) => a.pct).join(".");
+  return `${page}#p=${res.code}.${pcts}${mod ? `.${mod}` : ""}`;
 }
 
 /**
@@ -275,12 +280,16 @@ function prepareSquareFile(result, code) {
   return squarePromise;
 }
 
-const shareText = (tp) => `会計人16タイプ、私は「${tp.name}」でした\n#会計人プロフィール`;
+// 性格まで答えた人は、その一言も名前に添えて投稿する。
+// 答えていない人は今までどおり素の名前だけ。
+const shareText = (tp, mod) =>
+  `会計人16タイプ、私は「${mod ? `${mod} ` : ""}${tp.name}」でした\n#会計人プロフィール`;
 
 /** X の投稿画面の URL。共有ボタンの href にそのまま入れる。 */
 function intentUrl(res, code, tp) {
+  const mod = state.preview ? null : archetypeModifier(res);
   return (
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText(tp))}` +
+    `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText(tp, mod))}` +
     `&url=${encodeURIComponent(shareUrl(res, code))}`
   );
 }

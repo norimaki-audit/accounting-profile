@@ -431,9 +431,36 @@ const MODIFIERS = {
 };
 const MODIFIER_MIN_GAP = 20;   // 70 以上 または 30 以下
 
-/** 突出した特性から修飾語を 1 つ選ぶ。突出がなければ null。 */
+// 修飾語を共有リンクに載せるための番号。
+//
+// 語そのものを URL に入れると長くなるうえ、あとから言い回しを変えたときに
+// 古いリンクだけ昔の語を配り続ける。番号で持てば、語を直せば全部が直る。
+const MODIFIER_ORDER = [["A", "hi"], ["A", "lo"], ["S", "hi"], ["S", "lo"]];
+
+/** 修飾語の番号（0 = 付かない）。共有リンクの末尾に載せる。 */
+export function modifierCode(result) {
+  const word = archetypeModifier(result);
+  if (!word) return 0;
+  const i = MODIFIER_ORDER.findIndex(([tr, k]) => MODIFIERS[tr][k] === word);
+  return i < 0 ? 0 : i + 1;
+}
+
+/** 番号から修飾語を戻す。範囲外・0 は null。 */
+export function modifierFromCode(n) {
+  const e = MODIFIER_ORDER[Number(n) - 1];
+  return e ? MODIFIERS[e[0]][e[1]] : null;
+}
+
+/**
+ * 突出した特性から修飾語を 1 つ選ぶ。突出がなければ null。
+ *
+ * 共有リンクから復元した結果は性格そのもの（bf）を持たない。そのときは
+ * リンクに載っていた番号から戻した語を返す（性格まで答えた人の一言を、
+ * 共有先でも同じように見せるため）。
+ */
 export function archetypeModifier(result) {
-  if (!result || !result.bf) return null;
+  if (!result) return null;
+  if (!result.bf) return result.mod || null;
   let best = null;
   Object.keys(MODIFIERS).forEach((tr) => {
     const v = result.bf[tr];
@@ -535,12 +562,15 @@ export function typeGrid() {
 }
 
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */
-export function resultFromPcts(code, pcts) {
+export function resultFromPcts(code, pcts, modCode) {
   const axes = D.styleAxes.map((ax, i) => {
     const pct = Math.max(50, Math.min(100, pcts[i]));
     return { ax, letter: code[i], pct };
   });
-  return { code, axes, bf: null, study: null, subjectTop: null, practiceTop: null, fromAnswers: false };
+  return {
+    code, axes, bf: null, mod: modifierFromCode(modCode),
+    study: null, subjectTop: null, practiceTop: null, fromAnswers: false,
+  };
 }
 
 /** Profile Map 用: 各軸で勝ち極に寄与の大きかった回答 上位 2 件。 */

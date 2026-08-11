@@ -2,7 +2,7 @@ import { h, btn, prefersReducedMotion, scrollTop } from "../ui.js";
 import * as D from "../data.js";
 import {
   evidence, studyGroups, studyOn, studyLabel, habitLines,
-  missingLayers, archetypeModifier, firstIncompletePage, corePageCount,
+  missingLayers, archetypeModifier, firstIncompletePage, corePageCount, neighbors,
 } from "../scoring.js";
 import { state, setState, clearDraft } from "../state.js";
 import { buildSquareShareFile, downloadSheet, downloadSquareCard } from "../export.js";
@@ -38,6 +38,7 @@ export function renderResult() {
   push(renderHabits(personal, code));
   push(renderMap(axes, personal, code, tp));
   push(renderDescription(tp));
+  push(renderNeighbors(code));
 
   // ビジュアルを先頭にした順で、以降のセクションを順に立ち上げる
   [visual, ...sections].forEach((node, i) => {
@@ -359,6 +360,48 @@ async function saveForInstagram(result, code, statusEl, button) {
     text: "Instagramを開く",
     onClick: openInstagram,
   }));
+}
+
+/**
+ * 1軸だけ違うタイプ。
+ *
+ * 出すのは「どの軸が、どちらへ入れ替わるか」だけ。相性でも優劣でもなく、
+ * 4軸のうち1つを裏返すと誰になるかという距離の話に留める。
+ * ここから図鑑のプレビューへ入れるようにして、16タイプを見に行く導線にする。
+ */
+function renderNeighbors(code) {
+  const list = neighbors(code);
+  if (!list.length) return null;
+
+  return card("1軸だけ違うタイプ", "4つの軸のうち、1つだけ入れ替わるとこの動物になります",
+    h("div.ap-near", {},
+      list.map((n) => {
+        const tp = D.types[n.code];
+        const chip = h("span.ap-near-chip", {
+          style: `background:linear-gradient(120deg,${tp.c[0]},${tp.c[1]})`,
+        });
+        const img = h("img.ap-near-img", {
+          alt: "", decoding: "async", onError: (e) => e.currentTarget.remove(),
+        });
+        img.src = D.characterThumb(n.code);
+        chip.append(img);
+
+        return btn("button.ap-near-item", {
+          onClick: () => {
+            setState({ screen: "result", preview: true, previewCode: n.code, previewFromPath: false });
+            scrollTop();
+          },
+        },
+          chip,
+          h("span.ap-near-body", {},
+            h("span.nm-mono.ap-near-axis", { text: `${n.ax.name}  ${n.fromName} → ${n.toName}` }),
+            h("span.ap-serif.ap-near-name", { text: tp.name }),
+            h("span.ap-near-animal", { text: D.animals[n.code] })
+          )
+        );
+      })
+    )
+  );
 }
 
 function retake() {

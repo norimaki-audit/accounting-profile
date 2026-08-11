@@ -467,6 +467,42 @@ export function missingLayers(result, ops = {}) {
   return all.filter((l) => !l.filled).map(({ filled, ...rest }) => rest);
 }
 
+// ---- タイプ同士の距離 ----
+//
+// 「相性」ではなく「軸がいくつ違うか」だけを出す。相性を言うと、当たっている／
+// 外れているの話になり、型に決めつけないという方針から外れる。
+// 違う軸の数と名前は事実なので、そこまでに留める。
+
+/** 2つのコードで極が違う軸。返すのは軸そのもの（名前は呼び出し側で使う）。 */
+export function axisDiff(a, b) {
+  if (!a || !b) return [];
+  return D.styleAxes.filter((_, i) => a[i] !== b[i]);
+}
+
+/**
+ * その軸だけ極を裏返したコード。
+ * 「ここが1つ違うと、どのタイプになるか」を出すために使う。
+ */
+export function flipAxis(code, ai) {
+  const ax = D.styleAxes[ai];
+  return code.split("").map((c, i) => (i === ai ? (c === ax.L ? ax.R : ax.L) : c)).join("");
+}
+
+/** 1軸だけ違う4タイプ。軸の並び順で返す。 */
+export function neighbors(code) {
+  if (!D.types[code]) return [];
+  return D.styleAxes.map((ax, ai) => {
+    const to = flipAxis(code, ai);
+    const from = code[ai];
+    return {
+      code: to,
+      ax,
+      fromName: from === ax.L ? ax.lName : ax.rName,
+      toName: from === ax.L ? ax.rName : ax.lName,
+    };
+  });
+}
+
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */
 export function resultFromPcts(code, pcts) {
   const axes = D.styleAxes.map((ax, i) => {

@@ -338,6 +338,35 @@ group("共有リンク");
   ok("共有リンクからは性格を復元しない", r.bf === null);
 }
 
+group("タイプ同士の距離");
+{
+  // 1軸だけ違う4タイプ。相性ではなく「どの軸が入れ替わるか」だけを出す
+  const n = S.neighbors("PVSD");
+  eq("1軸違いは4つ", n.length, 4);
+  ok("どれも1軸だけ違う",
+    n.every((x) => S.axisDiff("PVSD", x.code).length === 1));
+  ok("軸の順に並ぶ", n.map((x) => x.ax.name).join() === D.styleAxes.map((a) => a.name).join());
+  eq("入れ替わる極を持つ", `${n[0].fromName}→${n[0].toName}`, "精密→俯瞰");
+  ok("存在しないコードでは何も返さない", S.neighbors("ZZZZ").length === 0);
+
+  // 距離の計算
+  eq("同じタイプは0軸違い", S.axisDiff("PVSD", "PVSD").length, 0);
+  eq("正反対は4軸違い", S.axisDiff("PVSD", "BXAC").length, 4);
+  ok("違う軸の名前を返す", S.axisDiff("PVSD", "BVAD").map((a) => a.name).join("・") === "視座・進め方");
+
+  // 画面に出す文言で相性・優劣を言わない（コメントには方針として出てくるので除く）
+  const strip = (t) => t.split(/\r?\n/)
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join(" ");
+  const view = strip(await readFile(join(ROOT, "src", "screens", "types.js"), "utf8"))
+    + strip(await readFile(join(ROOT, "src", "screens", "result.js"), "utf8"));
+  ok("相性・優劣の言い方をしない",
+    !/相性|向いてい|優れ/.test(view));
+  // 他人の結果（共有リンクからの復元）を自分のタイプとして使わない
+  ok("図鑑の比較は自分の結果のときだけ",
+    /state\.result && state\.result\.fromAnswers/.test(
+      await readFile(join(ROOT, "src", "screens", "types.js"), "utf8")));
+}
+
 group("共有リンクの転送");
 {
   // 共有リンクを開いた人がもう一度コピーしても、数値が落ちないこと。

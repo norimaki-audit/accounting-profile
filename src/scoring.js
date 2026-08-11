@@ -503,6 +503,31 @@ export function neighbors(code) {
   });
 }
 
+// 16タイプを平面に並べたときの位置。
+//
+// たてに 視座×推論、よこに 進め方×作業様式 を割り当てる。並び順を「隣り合う
+// ものは1文字だけ変わる」順（P V → P X → B X → B V）にしてあるので、
+// たて・よこに隣り合うタイプは必ず軸が1つだけ違う。左右の端どうし・上下の
+// 端どうしも隣（4軸の組合せを平面に開いた形なので、輪になっている）。
+//
+// 線も距離も引かない。位置そのものが関係を表すので、近い遠いに優劣を与えずに済む。
+const GRID_ROWS = [["P", "V"], ["P", "X"], ["B", "X"], ["B", "V"]];
+const GRID_COLS = [["S", "D"], ["S", "C"], ["A", "C"], ["A", "D"]];
+
+const poleName = (ai, letter) =>
+  letter === D.styleAxes[ai].L ? D.styleAxes[ai].lName : D.styleAxes[ai].rName;
+
+/** 4×4 の配置。rows/cols は見出し、cells[r][c] はアーキタイプのコード。 */
+export function typeGrid() {
+  return {
+    rowAxes: [D.styleAxes[0], D.styleAxes[1]],
+    colAxes: [D.styleAxes[2], D.styleAxes[3]],
+    rows: GRID_ROWS.map((r) => [poleName(0, r[0]), poleName(1, r[1])]),
+    cols: GRID_COLS.map((c) => [poleName(2, c[0]), poleName(3, c[1])]),
+    cells: GRID_ROWS.map((r) => GRID_COLS.map((c) => r[0] + r[1] + c[0] + c[1])),
+  };
+}
+
 /** 共有リンク（#p=CODE.pct.pct.pct.pct）からの復元。Work Style とアーキタイプのみ。 */
 export function resultFromPcts(code, pcts) {
   const axes = D.styleAxes.map((ax, i) => {

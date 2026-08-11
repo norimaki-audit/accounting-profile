@@ -361,6 +361,26 @@ group("タイプ同士の距離");
     + strip(await readFile(join(ROOT, "src", "screens", "result.js"), "utf8"));
   ok("相性・優劣の言い方をしない",
     !/相性|向いてい|優れ/.test(view));
+  // 4×4 の配置。たて・よこに隣り合うタイプが必ず1軸だけ違うこと（端の回り込み含む）
+  {
+    const g = S.typeGrid();
+    const flat = g.cells.flat();
+    eq("16タイプすべてが1回ずつ並ぶ", new Set(flat).size, 16);
+    ok("並ぶのは実在するコードだけ", flat.every((c) => !!D.types[c]));
+    let bad = 0;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        if (S.axisDiff(g.cells[i][j], g.cells[i][(j + 1) % 4]).length !== 1) bad++;
+        if (S.axisDiff(g.cells[i][j], g.cells[(i + 1) % 4][j]).length !== 1) bad++;
+      }
+    }
+    eq("隣り合うのは必ず1軸違い（端の回り込み含む32組）", bad, 0);
+    ok("たては視座・推論、よこは進め方・作業様式",
+      g.rowAxes.map((a) => a.name).join() === "視座,推論" &&
+      g.colAxes.map((a) => a.name).join() === "進め方,作業様式");
+    ok("見出しは極の名前", g.rows[0].join("・") === "精密・検証" && g.cols[0].join("・") === "構造・深掘");
+  }
+
   // 違いの数を出さない（1→4 の段階に見え、近いほうが良いという順位になる）
   ok("違いを数で言わない", !/軸違い/.test(view));
   // 他人の結果（共有リンクからの復元）を自分のタイプとして使わない

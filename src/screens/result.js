@@ -402,7 +402,12 @@ function renderNeighbors(code) {
           )
         );
       })
-    )
+    ),
+    // 16タイプ全体の並びは図鑑にある。ここからは1行で送る
+    btn("button.ap-inline-link.ap-near-more", {
+      text: "16タイプの位置関係を見る",
+      onClick: () => { setState({ screen: "types" }); scrollTop(); },
+    })
   );
 }
 

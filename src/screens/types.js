@@ -1,6 +1,6 @@
 import { h, btn, scrollTop } from "../ui.js";
 import * as D from "../data.js";
-import { axisDiff } from "../scoring.js";
+import { axisDiff, typeGrid } from "../scoring.js";
 import { state, setState } from "../state.js";
 import { startQuiz } from "./home.js";
 
@@ -21,6 +21,7 @@ export function renderTypes() {
           text: `あなたは「${D.types[mine].name}」。各タイプに、4軸のうちどこが違うかを出しています。`,
         })
       : null,
+    renderGrid(mine),
     h("div.ap-types-grid", {},
       D.typeOrder.map((code) => {
         const tp = D.types[code];
@@ -53,6 +54,68 @@ export function renderTypes() {
         );
       })
     )
+  );
+}
+
+/**
+ * 16タイプの位置関係。
+ *
+ * たてに 視座×推論、よこに 進め方×作業様式。並びを工夫してあるので、
+ * たて・よこに隣り合うタイプは軸が1つだけ違う（端どうしもつながっている）。
+ *
+ * 線も矢印も距離の数値も引かない。位置に置くだけで関係が読めるので、
+ * 近い遠いに良し悪しを与えずに済む。
+ */
+const axisLine = (dir, axes) =>
+  `${dir}：${axes.map((a) => `${a.name}（${a.lName}／${a.rName}）`).join(" × ")}`;
+
+function renderGrid(mine) {
+  const g = typeGrid();
+  const cells = [];
+
+  // 列見出し（進め方×作業様式）。行見出しは各行の上に置く。
+  // 左に見出し列を作ると絵が 70px まで痩せて、暗い絵の動物が判別できなくなる。
+  g.cols.forEach((c) =>
+    cells.push(h("div.nm-mono.ap-grid-head", {},
+      h("span", { text: c[0] }), h("span", { text: c[1] })))
+  );
+
+  g.cells.forEach((row, r) => {
+    cells.push(h("div.nm-mono.ap-grid-row-label", { text: g.rows[r].join("・") }));
+    row.forEach((code) => {
+      const tp = D.types[code];
+      const isMine = mine === code;
+      const img = h("img.ap-grid-img", {
+        alt: "", decoding: "async", onError: (e) => e.currentTarget.remove(),
+      });
+      img.src = D.characterThumb(code);
+      cells.push(btn("button.ap-grid-cell", {
+        class: isMine ? "is-mine" : null,
+        "aria-label": `${tp.name}（${D.animals[code]}）`,
+        title: tp.name,
+        onClick: () => {
+          setState({ screen: "result", preview: true, previewCode: code, previewFromPath: false });
+          scrollTop();
+        },
+      },
+        h("span.ap-grid-art", {
+          style: `background:linear-gradient(120deg,${tp.c[0]},${tp.c[1]})`,
+        }, img),
+        h("span.ap-grid-animal", { text: D.animals[code] }),
+        isMine ? h("span.ap-grid-you", { text: "あなた" }) : null
+      ));
+    });
+  });
+
+  return h("section.ap-grid-wrap", {},
+    h("h3.ap-serif.ap-grid-title", { text: "16タイプの位置関係" }),
+    // 見出しの「精密・検証」がどの軸の極なのかは、ここで対応を書かないと伝わらない
+    h("p.nm-supporting-text.ap-grid-lead", { text: axisLine("たて", g.rowAxes) }),
+    h("p.nm-supporting-text.ap-grid-lead", { text: axisLine("よこ", g.colAxes) }),
+    h("p.nm-supporting-text.ap-grid-lead", {
+      text: "たて・よこに隣り合うタイプは、軸が1つだけ違います（左右・上下の端どうしも隣です）。",
+    }),
+    h("div.ap-grid", {}, cells)
   );
 }
 

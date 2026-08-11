@@ -4,10 +4,10 @@
 
 import { h, btn, clear, scrollTop } from "./ui.js";
 import * as D from "./data.js";
-import { resultFromPcts } from "./scoring.js";
+import { resultFromPcts, pages, pageApplies, firstIncompletePage } from "./scoring.js";
 import { state, setState, subscribe, loadDraft, setNavigationHook } from "./state.js";
 import { renderHome } from "./screens/home.js";
-import { renderQuiz } from "./screens/quiz.js";
+import { renderQuiz, cancelAutoAdvance } from "./screens/quiz.js";
 import { renderResult } from "./screens/result.js";
 import { renderTypes } from "./screens/types.js";
 
@@ -96,15 +96,41 @@ function pushHistory() {
   currentNav = key;
 }
 
+/**
+ * 履歴に積んだ画面が、いまの回答でもまだ成立するか。
+ *
+ * 積んだあとに回答を変えると、そのページが出題対象でなくなることがある。
+ * 同点を解消したあとの二択ページ、「受験経験なし」に変えたあとの科目ページ、
+ * 「もう一度作る」で回答を消したあとの結果画面がそれにあたる。
+ * 回答を変えても navKey は動かないので、進む側のエントリはそのまま残っている。
+ * 素通しすると設問ゼロの空ページや、回答ゼロの結果が出てしまう。
+ */
+function reachable({ screen, page, preview }) {
+  if (screen === "quiz") return pageApplies(pages()[page], state.ops, state.ans);
+  // 図鑑プレビューはコードだけで成立する。自分の結果は要らない
+  if (screen === "result") return preview || !!state.result;
+  return true;
+}
+
 function onPopState(e) {
   const saved = e.state && e.state.nav;
   if (!saved) return;   // 自分が積んだエントリでなければ触らない
+  // 4問そろえた直後に戻ると、350ms 後の自動送りが戻った先で発火する
+  cancelAutoAdvance();
   const [screen, page, preview, previewCode, previewFromPath] = JSON.parse(saved);
   restoring = true;
   // 戻すのは画面の位置だけ。回答（ans / ops）と結果はそのまま持ち越す
-  setState({ screen, page, preview, previewCode, previewFromPath });
+  if (reachable({ screen, page, preview })) {
+    setState({ screen, page, preview, previewCode, previewFromPath });
+  } else if (screen === "quiz") {
+    // 出題対象でなくなったページは、いまの回答で行くべきページへ寄せる
+    setState({ screen, page: firstIncompletePage(state.ans, state.ops), preview: false, previewCode: null });
+  } else {
+    // 見せる結果が無くなっていた（回答を消したあと）。トップへ返す
+    setState({ screen: "home", preview: false, previewCode: null });
+  }
   restoring = false;
-  currentNav = saved;
+  currentNav = navKey();
 
   // スクロール位置を戻す。setState の時点で DOM は組み直されているので同期で戻せる。
   // requestAnimationFrame は使わない（タブが表に出ていないと発火せず、戻したはずの

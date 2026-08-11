@@ -23,6 +23,16 @@ const autoAdvanceEnabled = () => localStorage.getItem(AUTO_ADVANCE_KEY) !== "off
 let els = {};
 let advanceTimer = null;
 
+/**
+ * 予約してある自動送りを取り消す。
+ *
+ * 4問そろうと 350ms 後に次ページへ進む予約が入る。その間にスワイプバックされると、
+ * 戻った先で予約が発火して画面がまた進んでしまう。画面を離れる側から呼ぶ。
+ */
+export function cancelAutoAdvance() {
+  clearTimeout(advanceTimer);
+}
+
 export function renderQuiz() {
   const body = h("div.ap-quiz-body");
   const progressFill = h("div.ap-progress-fill");
@@ -378,6 +388,9 @@ function goPrev() {
 
 function goNext() {
   clearTimeout(advanceTimer);
+  // 自動送りのタイマーが残ったまま画面を離れることがある（戻る操作など）。
+  // 質問画面にいないのに進めると、戻ったはずの画面が勝手に先へ動く。
+  if (state.screen !== "quiz") return;
   if (!isPageComplete()) return;
   const next = nextPageIndex(state.page, state.ops, 1, state.ans);
 

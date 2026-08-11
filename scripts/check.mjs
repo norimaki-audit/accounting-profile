@@ -421,12 +421,32 @@ group("戻る操作（履歴）");
   // 戻すのは画面の位置だけ。ans / ops / result を popstate で書き換えない
   const at = app.indexOf("function onPopState");
   const fn = app.slice(at, app.indexOf("\n}", at));
-  ok("戻ったときに回答や結果は捨てない", !/\bans\b|\bops\b|\bresult\b/.test(fn));
+  // 読むのは構わない（どのページへ寄せるかの判断に要る）。上書きしないことを見る。
+  const patches = [...fn.matchAll(/setState\(\{([^}]*)\}/g)].map((m) => m[1]);
+  ok("戻る操作で setState を呼んでいる", patches.length > 0);
+  ok("戻ったときに回答や結果は捨てない",
+    patches.every((p) => !/\b(ans|ops|result)\s*:/.test(p)),
+    patches.filter((p) => /\b(ans|ops|result)\s*:/.test(p)).join(" / "));
 
   // URL をルートへ戻すときに履歴の状態まで消さない
   ok("normalizeUrl は history.state を残す",
     /history\.replaceState\(history\.state, "", root\)/.test(app));
   ok("スクロールは自前で戻す", /history\.scrollRestoration = "manual"/.test(app));
+
+  // 4問そろえた直後に戻ると、350ms 後の自動送りが戻った先で発火して画面が進む
+  ok("戻るときに自動送りの予約を取り消す", /cancelAutoAdvance\(\);/.test(app));
+  const quiz = await readFile(join(ROOT, "src", "screens", "quiz.js"), "utf8");
+  ok("自動送りの取り消し口がある", /export function cancelAutoAdvance/.test(quiz));
+  ok("質問画面を離れていたら自動送りで進めない",
+    /if \(state\.screen !== "quiz"\) return;/.test(quiz));
+
+  // 積んだあとに回答を変えると、そのページが出題対象でなくなることがある。
+  // 素通しすると設問ゼロの空ページや、回答ゼロの結果が出る
+  // 宣言があるだけでは足りない。onPopState が実際に呼んでいることを見る
+  ok("復元先が成立するか確かめる",
+    /function reachable/.test(app) && /\breachable\(/.test(fn));
+  ok("出題対象外なら行くべきページへ寄せる", /firstIncompletePage\(state\.ans, state\.ops\)/.test(app));
+  ok("見せる結果が無ければトップへ返す", /screen: "home", preview: false/.test(app));
   // タブが表に出ていないと発火しないので、位置の復元に rAF は使わない
   ok("スクロール復元に requestAnimationFrame を使わない", !/requestAnimationFrame/.test(app));
 }

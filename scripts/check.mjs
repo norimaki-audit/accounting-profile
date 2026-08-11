@@ -11,7 +11,7 @@
 //
 // ブラウザ API に触る処理（canvas での画像生成など）はここでは検証できない。
 
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -421,7 +421,7 @@ group("戻る操作（履歴）");
   // 戻すのは画面の位置だけ。ans / ops / result を popstate で書き換えない
   const at = app.indexOf("function onPopState");
   const fn = app.slice(at, app.indexOf("\n}", at));
-  ok("戻ったときに回答や結果は捨てない", !/ans|ops|result/.test(fn));
+  ok("戻ったときに回答や結果は捨てない", !/\bans\b|\bops\b|\bresult\b/.test(fn));
 
   // URL をルートへ戻すときに履歴の状態まで消さない
   ok("normalizeUrl は history.state を残す",
@@ -451,7 +451,26 @@ group("共有リンクの転送");
   // ただしこちらから ?p= を作ることはしない（作るとサーバーの記録に数値が残る）
   const app = await readFile(join(ROOT, "src", "app.js"), "utf8");
   ok("?p= も読める", /SHARE_DATA = \/\[#\?&\]p=/.test(app));
-  ok("生成するのは #p= だけ", !/\?p=\$\{/.test(src) && /#p=\$\{/.test(src));
+  ok("結果リンクは #p= で作る", /#p=\$\{/.test(src));
+
+  // src 全体を見る。テンプレートリテラルの綴りだけを見ていると、文字列連結で
+  // 書き換えられたときに素通りする（実際に "?p=" + code に変えても通ってしまった）。
+  // 読む側の宣言（SHARE_DATA）以外に ?p= が現れたら失敗させる。
+  {
+    const files = (await readdir(join(ROOT, "src"), { recursive: true }))
+      .filter((f) => f.endsWith(".js"));
+    const offenders = [];
+    for (const f of files) {
+      const text = await readFile(join(ROOT, "src", f), "utf8");
+      text.split(/\r?\n/).forEach((l, i) => {
+        if (l.trim().startsWith("//")) return;          // コメントの説明は対象外
+        if (!l.includes("?p=")) return;
+        if (l.includes("SHARE_DATA")) return;           // 読む側の宣言だけ許す
+        offenders.push(`src/${f}:${i + 1}`);
+      });
+    }
+    ok("生成するのは #p= だけ（src 全体）", offenders.length === 0, offenders.join(" / "));
+  }
 
   // 数値なしで /t/{CODE}/ に来た人に、個人の結果ではないと分かる文を出す
   ok("数値なしの紹介ページはその旨を出す",

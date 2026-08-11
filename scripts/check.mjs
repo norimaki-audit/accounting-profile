@@ -490,6 +490,21 @@ group("共有ボタン");
 
   // Instagram は共有シートが出る。X と同じ「〜でシェア」だと直行すると読めてしまう
   ok("Instagramボタンは直行すると読める文言にしない", !/Instagramでシェア/.test(src));
+
+  // プレビュー中は自分の結果を画像に混ぜない。混ぜると、別タイプの名前と動物の上に
+  // 自分の4軸バーが乗った、名前とバーが食い違うカードが保存される。
+  ok("プレビューでは結果を画像に渡さない",
+    /const shareRes = state\.preview \? null : res;/.test(src)
+    && /shareToInstagram\(shareRes,/.test(src)
+    && /prepareSquareFile\(shareRes,/.test(src));
+  // モジュール変数のカードは、いま画面に出ているものか確かめてから使う
+  ok("作り置きのカードは指紋を照合してから使う",
+    /squareKey === shareKey\(result, code\)/.test(src));
+
+  // カードには性格から作った一言（修飾語・タグ）も乗る。修飾語（協調性/情動安定性・
+  // 差20以上）だけを指紋にすると、外向性だけ突出した人でタグの変化を取りこぼす。
+  ok("カードの指紋は性格そのものを含む", /JSON\.stringify\(result\.bf \|\| null\)/.test(src));
+  ok("修飾語だけを指紋にしない", !/shareKey[\s\S]{0,200}archetypeModifier/.test(src));
   // 画像ができる前に押すと黙って保存に落ちていたので、できるまで押せなくする
   ok("画像ができるまでInstagramボタンを押せなくする",
     /igBtn\.disabled = true;/.test(src) && /prepareSquareFile\([^)]*\)\.then/.test(src));

@@ -123,17 +123,21 @@ function renderHeader(tp, res, code, mod) {
   // X の intent にあたる URL が無く、Web から画像を渡す道は共有シートしかない）。
   // 隣の「Xでシェア」と同じ形にすると直行すると読めるため、実際に何が起きるかを
   // 書いた「画像を共有」にしている。
-  // 図鑑プレビューには渡す結果が無いので、共有シートには回さず保存だけにする
-  const willShare = canUseOsShare() && !state.preview && !!res;
+  // 画像に焼くのは、画面に出ているアーキタイプの結果だけ。プレビュー中に
+  // state.result（自分の結果）を混ぜると、別タイプの名前と動物の上に自分の
+  // 4軸バーと性格の一言が乗った、名前とバーが食い違うカードができる。
+  // プレビューではそのアーキタイプ単体のカード（結果なし）を保存する。
+  const shareRes = state.preview ? null : res;
+  const willShare = canUseOsShare() && !!shareRes;
   const igBtn = btn("button.nm-btn.nm-btn--secondary.nm-btn--lg.ap-share-ig", {
     text: willShare ? "画像を準備中…" : "Instagram用に保存",
-    onClick: (e) => shareToInstagram(res, code, shareStatus, e.currentTarget),
+    onClick: (e) => shareToInstagram(shareRes, code, shareStatus, e.currentTarget),
   });
   // 画像ができるまで押せなくする。押すタイミングによって共有シートが出たり
   // 黙って保存になったりしていたので、押せる＝必ず共有シートが出る状態にする。
   if (willShare) {
     igBtn.disabled = true;
-    prepareSquareFile(res, code).then((file) => {
+    prepareSquareFile(shareRes, code).then((file) => {
       igBtn.disabled = false;
       igBtn.textContent = file ? "Instagram用の画像を共有" : "Instagram用に保存";
     });
@@ -226,9 +230,16 @@ let squareFile = null;
 let squareKey = null;      // いま作っている／作り終えた内容の指紋
 let squarePromise = null;  // その生成の Promise（ボタンの有効化に使う）
 
-/** カードに描く内容の指紋。性格を足して修飾語が付いたら作り直す。 */
+/**
+ * カードに描く内容の指紋。中身が変わったら作り直す。
+ *
+ * 性格は修飾語（協調性・情動安定性、50から20以上）と、カードの性格タグ
+ * （全5特性、50から15以上）の両方に効く。しきい値も対象の特性も違うので、
+ * 修飾語だけを見ると取りこぼす（外向性だけ突出した人は修飾語が付かないまま
+ * タグだけ増える）。性格そのものを指紋に入れて、動いたら必ず作り直す。
+ */
 const shareKey = (result, code) =>
-  [code, archetypeModifier(result) || "", result.axes.map((a) => a.pct).join(".")].join("|");
+  [code, JSON.stringify(result.bf || null), result.axes.map((a) => a.pct).join(".")].join("|");
 
 /** 正方形カードを作る。同じ内容なら作り直さず、同じ Promise を返す。 */
 function prepareSquareFile(result, code) {
@@ -320,7 +331,10 @@ function openInstagram(event) {
  * 必ず共有シートが出る。
  */
 function shareToInstagram(result, code, statusEl, button) {
-  const file = squareFile;
+  // 用意してある File が、いま画面に出ているものかを確かめてから使う。
+  // squareFile はモジュール変数なので、別のアーキタイプのプレビューへ移っても
+  // 前のカードが残っている。確認せずに掴むと、画面と違う画像が共有される。
+  const file = result && squareKey === shareKey(result, code) ? squareFile : null;
   if (file && canUseOsShare() && navigator.canShare({ files: [file] })) {
     // 出るのは共有シートで、Instagram はそこから利用者が選ぶ。Web からは
     // 渡す相手を指定できないので、押した瞬間に Instagram が開くことはない。

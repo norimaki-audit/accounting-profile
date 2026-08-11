@@ -373,7 +373,9 @@ function renderNeighbors(code) {
   const list = neighbors(code);
   if (!list.length) return null;
 
-  return card("1軸だけ違うタイプ", "4つの軸のうち、1つだけ入れ替わるとこの動物になります",
+  // 見出しに数を入れない（「1軸だけ」は特に近い＝相性が良い、と読まれる）。
+  // 入れ替わるのは軸ではなく極なので「反対だと」と書く。
+  return card("ここが1つ違うと", "4つのうち1つが反対だと、この動物になります",
     h("div.ap-near", {},
       list.map((n) => {
         const tp = D.types[n.code];

@@ -361,6 +361,8 @@ group("タイプ同士の距離");
     + strip(await readFile(join(ROOT, "src", "screens", "result.js"), "utf8"));
   ok("相性・優劣の言い方をしない",
     !/相性|向いてい|優れ/.test(view));
+  // 違いの数を出さない（1→4 の段階に見え、近いほうが良いという順位になる）
+  ok("違いを数で言わない", !/軸違い/.test(view));
   // 他人の結果（共有リンクからの復元）を自分のタイプとして使わない
   ok("図鑑の比較は自分の結果のときだけ",
     /state\.result && state\.result\.fromAnswers/.test(

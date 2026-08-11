@@ -60,14 +60,18 @@ export function renderTypes() {
  * 自分のタイプとの違い。
  *
  * 出すのは「4軸のうちどれが違うか」だけ。近い＝相性が良い、ではないので
- * 良し悪しの言葉は使わない。同じ軸は数えられるので、違う軸だけ名前で挙げる。
+ * 良し悪しの言葉は使わない。
+ *
+ * 数は出さない。「1軸違い」「4軸違い」と数えると 1→4 の段階に見え、
+ * 近いほうが良いという順位として読まれる。違う軸の名前を挙げれば
+ * 同じ軸は言わなくても分かるので、事実としてはこれで足りる。
  */
 function renderDiff(mine, code) {
   if (!mine) return null;
   const diff = axisDiff(mine, code);
   if (!diff.length) return h("span.ap-type-diff.ap-type-diff--self", { text: "あなたのタイプ" });
-  return h("span.ap-type-diff", {},
-    h("span.nm-mono.ap-type-diff-n", { text: `${diff.length}軸違い` }),
-    h("span", { text: diff.map((ax) => ax.name).join("・") })
-  );
+  const text = diff.length === D.styleAxes.length
+    ? "すべて違う"
+    : `${diff.map((ax) => ax.name).join("・")}が違う`;
+  return h("span.ap-type-diff", { text });
 }

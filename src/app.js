@@ -5,7 +5,7 @@
 import { h, btn, clear, scrollTop } from "./ui.js";
 import * as D from "./data.js";
 import { resultFromPcts } from "./scoring.js";
-import { state, setState, subscribe, loadDraft } from "./state.js";
+import { state, setState, subscribe, loadDraft, setNavigationHook } from "./state.js";
 import { renderHome } from "./screens/home.js";
 import { renderQuiz } from "./screens/quiz.js";
 import { renderResult } from "./screens/result.js";
@@ -66,7 +66,53 @@ function renderFooter() {
 function normalizeUrl() {
   if (state.screen === "result") return;
   const root = D.siteRoot();
-  if (location.href !== root) history.replaceState(null, "", root);
+  // history.state は残す。消すと戻ったときに画面を復元できなくなる
+  if (location.href !== root) history.replaceState(history.state, "", root);
+}
+
+// ---------------------------------------------------------------- 戻る操作
+//
+// 画面を state で切り替える作りなので、そのままでは履歴が1つも積まれない。
+// スワイプバックや端末の戻るを押すと、前の画面ではなくサイトごと離れてしまう。
+// 図鑑で動物を開いて一覧へ戻る、質問を1ページ戻る、といった当たり前の操作が
+// できないので、画面が変わるたびにエントリを積む。
+//
+// pushState に URL は渡さない（第3引数なし＝URL 据え置き）。渡すと #p=… が
+// 消えて、共有リンクから開いた人が戻ったときに4軸の数値を失う。積むのは状態だけ。
+
+const NAV_KEYS = ["screen", "page", "preview", "previewCode", "previewFromPath"];
+const navKey = () => JSON.stringify(NAV_KEYS.map((k) => state[k]));
+
+let currentNav = null;
+let restoring = false;   // 戻る操作での復元中は積み直さない
+
+function pushHistory() {
+  const key = navKey();
+  if (key === currentNav) return;
+  if (restoring) { currentNav = key; return; }
+  // 離れる画面のスクロール位置を、いま居るエントリに残してから積む
+  history.replaceState({ nav: currentNav, scroll: window.scrollY }, "");
+  history.pushState({ nav: key, scroll: 0 }, "");
+  currentNav = key;
+}
+
+function onPopState(e) {
+  const saved = e.state && e.state.nav;
+  if (!saved) return;   // 自分が積んだエントリでなければ触らない
+  const [screen, page, preview, previewCode, previewFromPath] = JSON.parse(saved);
+  restoring = true;
+  // 戻すのは画面の位置だけ。回答（ans / ops）と結果はそのまま持ち越す
+  setState({ screen, page, preview, previewCode, previewFromPath });
+  restoring = false;
+  currentNav = saved;
+
+  // スクロール位置を戻す。setState の時点で DOM は組み直されているので同期で戻せる。
+  // requestAnimationFrame は使わない（タブが表に出ていないと発火せず、戻したはずの
+  // 位置が先頭のままになる）。画像の読み込みで高さが伸びる場合に備えて一度だけ追う。
+  const y = e.state.scroll || 0;
+  const back = () => { if (window.scrollY !== y) window.scrollTo(0, y); };
+  back();
+  setTimeout(back, 0);
 }
 
 function render() {
@@ -112,6 +158,13 @@ function boot() {
       setState({ ans: draft.ans, ops: draft.ops || {}, page: draft.page || 0 }, { render: false });
     }
   }
+
+  // 履歴はここから積みはじめる（上の初期化ぶんは積まない）
+  history.scrollRestoration = "manual";
+  currentNav = navKey();
+  history.replaceState({ nav: currentNav, scroll: 0 }, "");
+  setNavigationHook(pushHistory);
+  window.addEventListener("popstate", onPopState);
 
   subscribe(render);
   render();

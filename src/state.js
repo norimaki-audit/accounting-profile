@@ -28,9 +28,16 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// 画面が変わったことを app.js へ知らせる口。ブラウザの履歴を積むのに使う。
+// 質問ページの送りは render:false で状態だけ更新するので、render の購読では拾えない。
+let onNavigate = null;
+export const setNavigationHook = (fn) => { onNavigate = fn; };
+
 /** 状態を更新して再描画を要求する。render:false なら購読者に通知しない。 */
 export function setState(patch, { render = true } = {}) {
   Object.assign(state, patch);
+  // 描画より先に呼ぶ（離れる画面のスクロール位置を、DOM が変わる前に読むため）
+  if (onNavigate) onNavigate();
   if (render) listeners.forEach((fn) => fn());
 }
 

@@ -389,6 +389,31 @@ group("タイプ同士の距離");
       await readFile(join(ROOT, "src", "screens", "types.js"), "utf8")));
 }
 
+group("戻る操作（履歴）");
+{
+  const raw = await readFile(join(ROOT, "src", "app.js"), "utf8");
+  // コメントには経緯として API 名が出てくるので、コードの行だけ見る
+  const app = raw.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+
+  ok("画面が変わったら履歴を積む",
+    app.includes('history.pushState({ nav: key, scroll: 0 }, "");'));
+  // URL を渡すと #p= が消え、共有リンクから開いた人が戻ったとき4軸を失う
+  eq("pushState は1か所だけ", (app.match(/history\.pushState\(/g) || []).length, 1);
+  ok("戻るを受ける", /addEventListener\("popstate"/.test(app));
+
+  // 戻すのは画面の位置だけ。ans / ops / result を popstate で書き換えない
+  const at = app.indexOf("function onPopState");
+  const fn = app.slice(at, app.indexOf("\n}", at));
+  ok("戻ったときに回答や結果は捨てない", !/ans|ops|result/.test(fn));
+
+  // URL をルートへ戻すときに履歴の状態まで消さない
+  ok("normalizeUrl は history.state を残す",
+    /history\.replaceState\(history\.state, "", root\)/.test(app));
+  ok("スクロールは自前で戻す", /history\.scrollRestoration = "manual"/.test(app));
+  // タブが表に出ていないと発火しないので、位置の復元に rAF は使わない
+  ok("スクロール復元に requestAnimationFrame を使わない", !/requestAnimationFrame/.test(app));
+}
+
 group("共有リンクの転送");
 {
   // 共有リンクを開いた人がもう一度コピーしても、数値が落ちないこと。

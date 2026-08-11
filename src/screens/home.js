@@ -81,7 +81,11 @@ export function renderHome() {
           onClick: resumeQuiz,
           text: `つづきから再開（${saved}問回答済み）`,
         }),
-      canReplay && !canResume &&
+      // コアが埋まっていれば、続きが残っていても結果は見せる。
+      // 16問で終えるのが本線なので、ここを「つづき」と排他にすると、
+      // 本線どおりに答えた人が翌日に自分の結果を open できなくなる
+      // （「つづきから再開」は性格の1ページ目に着地し、結果へ戻る道が無い）。
+      canReplay &&
         btn("button.nm-btn.nm-btn--tertiary.ap-cta-secondary", {
           onClick: () => showLastResult(draft),
           text: "前回の結果をもう一度見る",

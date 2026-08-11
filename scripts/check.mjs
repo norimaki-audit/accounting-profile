@@ -406,6 +406,27 @@ group("極の意味");
   ok("図鑑の表の下に凡例を出す", /ap-axis-legend[\s\S]{0,200}axisHint/.test(types));
 }
 
+group("トップの導線");
+{
+  // コア16問で終えるのが本線。ここを「つづき」と排他にすると、本線どおりに
+  // 答えた人が翌日に自分の結果を開けない（つづきは性格の1ページ目に着地し、
+  // そこから結果へ戻る道が無い）。
+  const home = await readFile(join(ROOT, "src", "screens", "home.js"), "utf8");
+  const at = home.indexOf("前回の結果をもう一度見る");
+  const around = home.slice(Math.max(0, at - 400), at);
+  ok("結果の再表示を「つづき」と排他にしない", !/canReplay && !canResume/.test(around));
+  ok("コアが埋まっていれば結果を再表示できる", /canReplay &&\s*$/m.test(around.trimEnd())
+    || /canReplay &&/.test(around));
+
+  // 「コアが埋まっている」の判定そのもの
+  const items = S.likertItems();
+  const core = {};
+  items.forEach((q, i) => { if (q.sec === "B") core[i] = 1; });
+  eq("コア16問だけでコアは埋まる", S.answeredCore(core), S.coreCount());
+  ok("コアだけの人はまだ続きがある", S.canResume(core, {}) === true);
+  // → 上の2つが同時に真になる人がいる。だから排他にしてはいけない
+}
+
 group("戻る操作（履歴）");
 {
   const raw = await readFile(join(ROOT, "src", "app.js"), "utf8");
